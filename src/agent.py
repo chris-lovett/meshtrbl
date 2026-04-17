@@ -45,16 +45,19 @@ class TroubleshootingAgent:
         # Load environment variables
         load_dotenv()
         
-        # Set up OpenAI
+        # Set up OpenAI - ensure API key is in environment
         self.api_key = openai_api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OpenAI API key must be provided or set in OPENAI_API_KEY environment variable")
         
-        # Initialize LLM
+        # Set the API key in environment if provided as parameter
+        if openai_api_key:
+            os.environ["OPENAI_API_KEY"] = openai_api_key
+        
+        # Initialize LLM (will automatically use OPENAI_API_KEY from environment)
         self.llm = ChatOpenAI(
             model=model,
-            temperature=temperature,
-            api_key=self.api_key
+            temperature=temperature
         )
         
         # Initialize tools
