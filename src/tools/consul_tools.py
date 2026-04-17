@@ -36,6 +36,7 @@ class ConsulTools:
             env_scheme = os.getenv("CONSUL_HTTP_SSL")
             env_verify = os.getenv("CONSUL_HTTP_SSL_VERIFY")
             env_ca_cert = os.getenv("CONSUL_CACERT")
+            env_token = os.getenv("CONSUL_HTTP_TOKEN")
             
             if env_addr:
                 parsed = urlparse(env_addr if "://" in env_addr else f"{scheme}://{env_addr}")
@@ -63,9 +64,13 @@ class ConsulTools:
             if env_ca_cert:
                 ca_cert = env_ca_cert
             
+            if env_token and not token:
+                token = env_token
+            
             original_consul_http_addr = os.environ.pop("CONSUL_HTTP_ADDR", None)
             original_consul_http_ssl = os.environ.pop("CONSUL_HTTP_SSL", None)
             original_consul_http_ssl_verify = os.environ.pop("CONSUL_HTTP_SSL_VERIFY", None)
+            original_consul_http_token = os.environ.pop("CONSUL_HTTP_TOKEN", None)
             try:
                 self.client = consul.Consul(
                     host=host,
@@ -83,8 +88,10 @@ class ConsulTools:
                 self.client.http.base_uri = f"{scheme}://{host}:{port}"
                 self.client.http.verify = ca_cert or verify
                 
-                # Test connection
-                self.client.agent.self()
+                # Test connection. python-consul 1.1.0 does not propagate the
+                # client token to /v1/agent/self, so validate with a catalog
+                # endpoint that includes the configured token automatically.
+                self.client.catalog.services(dc=datacenter)
             finally:
                 if original_consul_http_addr is not None:
                     os.environ["CONSUL_HTTP_ADDR"] = original_consul_http_addr
@@ -92,11 +99,13 @@ class ConsulTools:
                     os.environ["CONSUL_HTTP_SSL"] = original_consul_http_ssl
                 if original_consul_http_ssl_verify is not None:
                     os.environ["CONSUL_HTTP_SSL_VERIFY"] = original_consul_http_ssl_verify
+                if original_consul_http_token is not None:
+                    os.environ["CONSUL_HTTP_TOKEN"] = original_consul_http_token
             
         except Exception as e:
             raise Exception(
                 f"Failed to initialize Consul client: {str(e)} "
-                f"(host={host}, port={port}, scheme={scheme}, verify={ca_cert or verify})"
+                f"(host={host}, port={port}, scheme={scheme}, verify={ca_cert or verify}, token={'set' if token else 'unset'})"
             )
     
     def list_services(self, datacenter: Optional[str] = None) -> str:
