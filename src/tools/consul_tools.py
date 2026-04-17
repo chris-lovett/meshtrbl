@@ -3,6 +3,9 @@ Consul inspection tools for the troubleshooting agent.
 """
 
 from typing import Optional, Dict, Any, List
+import os
+from urllib.parse import urlparse
+
 import consul
 import json
 
@@ -10,9 +13,10 @@ import json
 class ConsulTools:
     """Tools for inspecting Consul service mesh."""
     
-    def __init__(self, host: str = "localhost", port: int = 8500, 
+    def __init__(self, host: str = "localhost", port: int = 8500,
                  token: Optional[str] = None, scheme: str = "http",
-                 datacenter: str = "dc1"):
+                 datacenter: str = "dc1", verify: bool = True,
+                 ca_cert: Optional[str] = None):
         """
         Initialize Consul client.
         
@@ -22,22 +26,78 @@ class ConsulTools:
             token: Consul ACL token (optional)
             scheme: http or https
             datacenter: Consul datacenter name
+            verify: Verify HTTPS certificates
+            ca_cert: Path to a custom CA bundle for Consul HTTPS
         """
         self.datacenter = datacenter
         
         try:
-            self.client = consul.Consul(
-                host=host,
-                port=port,
-                token=token,
-                scheme=scheme
-            )
+            env_addr = os.getenv("CONSUL_HTTP_ADDR")
+            env_scheme = os.getenv("CONSUL_HTTP_SSL")
+            env_verify = os.getenv("CONSUL_HTTP_SSL_VERIFY")
+            env_ca_cert = os.getenv("CONSUL_CACERT")
             
-            # Test connection
-            self.client.agent.self()
+            if env_addr:
+                parsed = urlparse(env_addr if "://" in env_addr else f"{scheme}://{env_addr}")
+                if parsed.hostname:
+                    host = parsed.hostname
+                if parsed.port:
+                    port = parsed.port
+                if "://" in env_addr and parsed.scheme:
+                    scheme = parsed.scheme
+            
+            if env_scheme:
+                normalized_env_scheme = env_scheme.lower()
+                if normalized_env_scheme == "true":
+                    scheme = "https"
+                elif normalized_env_scheme == "false":
+                    scheme = "http"
+            
+            if env_verify:
+                normalized_env_verify = env_verify.lower()
+                if normalized_env_verify == "false":
+                    verify = False
+                elif normalized_env_verify == "true":
+                    verify = True
+            
+            if env_ca_cert:
+                ca_cert = env_ca_cert
+            
+            original_consul_http_addr = os.environ.pop("CONSUL_HTTP_ADDR", None)
+            original_consul_http_ssl = os.environ.pop("CONSUL_HTTP_SSL", None)
+            original_consul_http_ssl_verify = os.environ.pop("CONSUL_HTTP_SSL_VERIFY", None)
+            try:
+                self.client = consul.Consul(
+                    host=host,
+                    port=port,
+                    token=token,
+                    scheme=scheme,
+                    verify=ca_cert or verify
+                )
+                
+                # Force the resolved connection details on the underlying HTTP client
+                # so library env parsing cannot silently override them.
+                self.client.http.host = host
+                self.client.http.port = port
+                self.client.http.scheme = scheme
+                self.client.http.base_uri = f"{scheme}://{host}:{port}"
+                self.client.http.verify = ca_cert or verify
+                
+                # Test connection
+                self.client.agent.self()
+            finally:
+                if original_consul_http_addr is not None:
+                    os.environ["CONSUL_HTTP_ADDR"] = original_consul_http_addr
+                if original_consul_http_ssl is not None:
+                    os.environ["CONSUL_HTTP_SSL"] = original_consul_http_ssl
+                if original_consul_http_ssl_verify is not None:
+                    os.environ["CONSUL_HTTP_SSL_VERIFY"] = original_consul_http_ssl_verify
             
         except Exception as e:
-            raise Exception(f"Failed to initialize Consul client: {str(e)}")
+            raise Exception(
+                f"Failed to initialize Consul client: {str(e)} "
+                f"(host={host}, port={port}, scheme={scheme}, verify={ca_cert or verify})"
+            )
     
     def list_services(self, datacenter: Optional[str] = None) -> str:
         """

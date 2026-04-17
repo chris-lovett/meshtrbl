@@ -60,8 +60,16 @@ cp .env.example .env
 Required environment variables:
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
-CONSUL_HTTP_ADDR=http://localhost:8500  # Optional
+CONSUL_HTTP_ADDR=127.0.0.1:8500  # Optional, use host:port format for python-consul
 K8S_NAMESPACE=default  # Optional
+```
+
+Optional Consul environment variables:
+```bash
+CONSUL_HTTP_TOKEN=                    # Recommended for ACL-enabled Consul clusters
+CONSUL_HTTP_SSL=false                 # Set to true for HTTPS
+CONSUL_HTTP_SSL_VERIFY=true           # Set to false for local troubleshooting with self-signed certs
+CONSUL_CACERT=/path/to/consul-ca.pem  # Preferred for HTTPS with a private CA
 ```
 
 ### Running the Agent
@@ -86,6 +94,78 @@ python -m src.agent \
   --consul-port 8500 \
   --verbose
 ```
+
+### Consul ACL Setup for Troubleshooting
+
+If your Consul cluster has ACLs enabled, create a dedicated token for the agent.
+
+1. Create a policy file in the repository:
+```bash
+cat > examples/consul-agent-troubleshooter-policy.hcl <<'EOF'
+agent_prefix "" {
+  policy = "read"
+}
+
+node_prefix "" {
+  policy = "read"
+}
+
+service_prefix "" {
+  policy = "read"
+}
+
+session_prefix "" {
+  policy = "read"
+}
+
+query_prefix "" {
+  policy = "read"
+}
+
+key_prefix "" {
+  policy = "read"
+}
+
+event_prefix "" {
+  policy = "read"
+}
+
+operator = "read"
+mesh = "read"
+peering = "read"
+acl = "read"
+
+intention_prefix "" {
+  policy = "read"
+}
+EOF
+```
+
+2. Create the policy and token:
+```bash
+consul acl policy create \
+  -name agent-troubleshooter-admin \
+  -description "Admin-level read policy for troubleshooting agent" \
+  -rules @examples/consul-agent-troubleshooter-policy.hcl
+
+consul acl token create \
+  -description "Token for k8s-consul troubleshooting agent" \
+  -policy-name agent-troubleshooter-admin
+```
+
+3. Configure the token for the agent:
+```bash
+export CONSUL_HTTP_ADDR=127.0.0.1:8501
+export CONSUL_HTTP_SSL=true
+export CONSUL_HTTP_SSL_VERIFY=false   # or set CONSUL_CACERT instead
+export CONSUL_HTTP_TOKEN=<secret-id>
+python -m src.agent
+```
+
+Notes:
+- Use `CONSUL_HTTP_ADDR=host:port` without `http://` or `https://`.
+- Prefer `CONSUL_CACERT` over disabling TLS verification.
+- If you need true write/admin behavior, create a separate higher-privilege policy rather than broadening the default troubleshooting token.
 
 ## 📖 Usage Examples
 

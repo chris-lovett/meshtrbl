@@ -42,6 +42,20 @@ Minimum required configuration in `.env`:
 OPENAI_API_KEY=sk-your-actual-api-key-here
 ```
 
+If you want to use Consul features in an ACL-enabled cluster, also configure:
+```bash
+CONSUL_HTTP_ADDR=127.0.0.1:8501
+CONSUL_HTTP_SSL=true
+CONSUL_HTTP_SSL_VERIFY=false   # for local troubleshooting only
+CONSUL_HTTP_TOKEN=<consul-token-secret-id>
+```
+
+If your Consul cluster uses a private CA, prefer:
+```bash
+CONSUL_CACERT=/path/to/consul-ca.pem
+```
+instead of disabling TLS verification.
+
 ## Step 3: Run (30 seconds)
 
 ```bash
@@ -142,7 +156,36 @@ kubectl cluster-info
 ```
 
 ### Issue: "Failed to initialize Consul client"
-**Solution:** This is optional. If you don't have Consul, the K8s features will still work. To disable Consul errors, you can modify the code or ensure Consul is accessible.
+**Solution:** Verify the Consul connection settings in `.env`:
+```bash
+CONSUL_HTTP_ADDR=127.0.0.1:8501
+CONSUL_HTTP_SSL=true
+CONSUL_HTTP_TOKEN=<token>
+```
+
+Important:
+- Use `host:port` format for `CONSUL_HTTP_ADDR`
+- Do not include `http://` or `https://`
+- For self-signed TLS during local testing, set `CONSUL_HTTP_SSL_VERIFY=false`
+- For production-like setups, use `CONSUL_CACERT=/path/to/consul-ca.pem`
+
+### Issue: "Permission denied: anonymous token lacks permission"
+**Solution:** Create a dedicated Consul ACL policy and token for the agent:
+```bash
+consul acl policy create \
+  -name agent-troubleshooter-admin \
+  -description "Admin-level read policy for troubleshooting agent" \
+  -rules @examples/consul-agent-troubleshooter-policy.hcl
+
+consul acl token create \
+  -description "Token for k8s-consul troubleshooting agent" \
+  -policy-name agent-troubleshooter-admin
+```
+
+Then set the token in your environment:
+```bash
+export CONSUL_HTTP_TOKEN=<secret-id>
+```
 
 ## What Can I Ask?
 
