@@ -3,7 +3,10 @@ Main agent implementation using LangChain.
 """
 
 import os
-from typing import Optional
+import sys
+import threading
+import time
+from typing import Dict, Optional
 from dotenv import load_dotenv
 
 from langchain.agents import AgentExecutor, create_react_agent
@@ -54,6 +57,8 @@ class TroubleshootingAgent:
         if openai_api_key:
             os.environ["OPENAI_API_KEY"] = openai_api_key
         
+        self.verbose = verbose
+        
         # Initialize LLM (will automatically use OPENAI_API_KEY from environment)
         self.llm = ChatOpenAI(
             model=model,
@@ -81,7 +86,6 @@ class TroubleshootingAgent:
             verbose=verbose,
             max_iterations=20,
             max_execution_time=120,
-            early_stopping_method="generate",
             handle_parsing_errors=True
         )
     
@@ -92,7 +96,10 @@ class TroubleshootingAgent:
             # Kubernetes tools
             Tool(
                 name="get_pod_status",
-                func=lambda x: self._parse_and_call(self.k8s_tools.get_pod_status, x),
+                func=self._wrap_tool_activity(
+                    "Checking pod status...",
+                    lambda x: self._parse_and_call(self.k8s_tools.get_pod_status, x)
+                ),
                 description="""Get the status of a Kubernetes pod. 
                 Input should be: pod_name or pod_name,namespace
                 Example: "my-app-pod" or "my-app-pod,production"
@@ -100,7 +107,10 @@ class TroubleshootingAgent:
             ),
             Tool(
                 name="get_pod_logs",
-                func=lambda x: self._parse_and_call(self.k8s_tools.get_pod_logs, x),
+                func=self._wrap_tool_activity(
+                    "Reviewing logs...",
+                    lambda x: self._parse_and_call(self.k8s_tools.get_pod_logs, x)
+                ),
                 description="""Get logs from a Kubernetes pod.
                 Input should be: pod_name or pod_name,namespace or pod_name,namespace,container
                 Example: "my-app-pod" or "my-app-pod,production" or "my-app-pod,production,app-container"
@@ -108,7 +118,10 @@ class TroubleshootingAgent:
             ),
             Tool(
                 name="list_pods",
-                func=lambda x: self._parse_and_call(self.k8s_tools.list_pods, x),
+                func=self._wrap_tool_activity(
+                    "Listing pods...",
+                    lambda x: self._parse_and_call(self.k8s_tools.list_pods, x)
+                ),
                 description="""List all pods in a namespace.
                 Input should be: namespace or namespace,label_selector
                 Example: "default" or "production,app=myapp"
@@ -116,7 +129,10 @@ class TroubleshootingAgent:
             ),
             Tool(
                 name="describe_pod",
-                func=lambda x: self._parse_and_call(self.k8s_tools.describe_pod, x),
+                func=self._wrap_tool_activity(
+                    "Inspecting pod details...",
+                    lambda x: self._parse_and_call(self.k8s_tools.describe_pod, x)
+                ),
                 description="""Get detailed information about a pod (similar to kubectl describe).
                 Input should be: pod_name or pod_name,namespace
                 Example: "my-app-pod" or "my-app-pod,production"
@@ -126,14 +142,20 @@ class TroubleshootingAgent:
             # Consul tools
             Tool(
                 name="list_consul_services",
-                func=lambda x: self.consul_tools.list_services(),
+                func=self._wrap_tool_activity(
+                    "Listing Consul services...",
+                    lambda x: self.consul_tools.list_services()
+                ),
                 description="""List all services registered in Consul.
                 Input: empty string or datacenter name
                 Use this to see what services are available in the service mesh."""
             ),
             Tool(
                 name="get_service_health",
-                func=lambda x: self.consul_tools.get_service_health(x),
+                func=self._wrap_tool_activity(
+                    "Checking Consul service health...",
+                    lambda x: self.consul_tools.get_service_health(x)
+                ),
                 description="""Get health status of a Consul service.
                 Input should be: service_name
                 Example: "web-service"
@@ -141,7 +163,10 @@ class TroubleshootingAgent:
             ),
             Tool(
                 name="get_service_instances",
-                func=lambda x: self.consul_tools.get_service_instances(x),
+                func=self._wrap_tool_activity(
+                    "Reviewing service instances...",
+                    lambda x: self.consul_tools.get_service_instances(x)
+                ),
                 description="""Get all instances of a Consul service.
                 Input should be: service_name
                 Example: "web-service"
@@ -149,14 +174,20 @@ class TroubleshootingAgent:
             ),
             Tool(
                 name="list_consul_intentions",
-                func=lambda x: self.consul_tools.list_intentions(),
+                func=self._wrap_tool_activity(
+                    "Listing Consul intentions...",
+                    lambda x: self.consul_tools.list_intentions()
+                ),
                 description="""List all Consul Connect intentions (service-to-service access rules).
                 Input: empty string
                 Use this to see which services can communicate with each other."""
             ),
             Tool(
                 name="check_consul_intention",
-                func=lambda x: self._parse_and_call(self.consul_tools.check_intention, x),
+                func=self._wrap_tool_activity(
+                    "Checking Consul intention...",
+                    lambda x: self._parse_and_call(self.consul_tools.check_intention, x)
+                ),
                 description="""Check if traffic is allowed between two services.
                 Input should be: source_service,destination_service
                 Example: "web,api"
@@ -164,7 +195,10 @@ class TroubleshootingAgent:
             ),
             Tool(
                 name="get_consul_members",
-                func=lambda x: self.consul_tools.get_agent_members(),
+                func=self._wrap_tool_activity(
+                    "Checking Consul cluster members...",
+                    lambda x: self.consul_tools.get_agent_members()
+                ),
                 description="""Get Consul cluster members.
                 Input: empty string
                 Use this to check cluster health and member status."""
@@ -173,6 +207,14 @@ class TroubleshootingAgent:
         
         return tools
     
+    def _wrap_tool_activity(self, activity_message: str, func):
+        """Print lightweight tool activity when verbose mode is disabled."""
+        def wrapped(input_str: str):
+            if not self.verbose:
+                print(f"\n{activity_message}", flush=True)
+            return func(input_str)
+        return wrapped
+
     def _parse_and_call(self, func, input_str: str):
         """Parse comma-separated input and call function with appropriate arguments."""
         if not input_str or input_str.strip() == "":
@@ -202,6 +244,35 @@ class TroubleshootingAgent:
         
         return agent
     
+    def _format_agent_output(self, output: str) -> str:
+        """Replace generic executor stop messages with friendlier language."""
+        generic_message = "Agent stopped due to iteration limit or time limit."
+        fallback_message = (
+            "I couldn't complete a diagnosis within the current limits and didn't gather enough evidence yet. "
+            "Try a narrower question or rerun with --verbose."
+        )
+
+        if output.strip() == generic_message:
+            return fallback_message
+
+        if generic_message in output:
+            return output.replace(
+                generic_message,
+                "I wasn't able to finish a full diagnosis within the current execution limits, but here's what I found so far."
+            )
+        return output
+
+    def _status_line_for_response(self, response: str) -> str:
+        """Generate a short final status line for CLI output."""
+        lowered = response.lower()
+        if lowered.startswith("error running agent:"):
+            return "Status: Unable to complete diagnosis"
+        if "didn't gather enough evidence yet" in lowered:
+            return "Status: Unable to complete diagnosis"
+        if "wasn't able to finish a full diagnosis within the current execution limits" in lowered:
+            return "Status: Partial diagnosis (execution limit reached)"
+        return "Status: Diagnosis complete"
+
     def run(self, query: str) -> str:
         """
         Run the agent with a troubleshooting query.
@@ -214,10 +285,48 @@ class TroubleshootingAgent:
         """
         try:
             result = self.agent_executor.invoke({"input": query})
-            return result["output"]
+            return self._format_agent_output(result["output"])
         except Exception as e:
-            return f"Error running agent: {str(e)}"
+            message = str(e)
+            if "iteration limit" in message.lower() or "time limit" in message.lower():
+                return (
+                    "I wasn't able to finish a full diagnosis within the current execution limits. "
+                    "Please try a narrower question, enable --verbose for more detail, or rerun with a more specific target."
+                )
+            return f"Error running agent: {message}"
     
+    def _run_with_spinner(self, query: str) -> str:
+        """Run the agent while showing a simple spinner in interactive mode."""
+        stop_event = threading.Event()
+        response_holder: Dict[str, str] = {"response": ""}
+
+        def spinner():
+            frames = ["|", "/", "-", "\\"]
+            idx = 0
+            while not stop_event.is_set():
+                sys.stdout.write(f"\rAgent is thinking... {frames[idx % len(frames)]}")
+                sys.stdout.flush()
+                idx += 1
+                time.sleep(0.1)
+            sys.stdout.write("\r" + (" " * 40) + "\r")
+            sys.stdout.flush()
+
+        def worker():
+            response_holder["response"] = self.run(query)
+            stop_event.set()
+
+        spinner_thread = threading.Thread(target=spinner)
+        worker_thread = threading.Thread(target=worker)
+
+        spinner_thread.start()
+        worker_thread.start()
+
+        worker_thread.join()
+        stop_event.set()
+        spinner_thread.join()
+
+        return response_holder["response"] or "Error running agent: No response was produced."
+
     def chat(self):
         """
         Start an interactive chat session with the agent.
@@ -239,9 +348,9 @@ class TroubleshootingAgent:
                 if not user_input:
                     continue
                 
-                print("\nAgent: ", end="", flush=True)
-                response = self.run(user_input)
-                print(response)
+                response = self._run_with_spinner(user_input)
+                print(f"\nAgent: {response}")
+                print(self._status_line_for_response(response))
                 
             except KeyboardInterrupt:
                 print("\n\nGoodbye! Happy troubleshooting!")
@@ -278,6 +387,7 @@ def main():
         # Single query mode
         response = agent.run(args.query)
         print(response)
+        print(agent._status_line_for_response(response))
     else:
         # Interactive chat mode
         agent.chat()
