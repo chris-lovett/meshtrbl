@@ -6,6 +6,7 @@ import os
 import sys
 import threading
 import time
+from collections import Counter
 from typing import Dict, Optional
 from dotenv import load_dotenv
 
@@ -31,6 +32,7 @@ class TroubleshootingAgent:
                  consul_host: str = "localhost",
                  consul_port: int = 8500,
                  consul_token: Optional[str] = None,
+                 reasoning_model: Optional[str] = None,
                  verbose: bool = False):
         """
         Initialize the troubleshooting agent.
@@ -43,6 +45,7 @@ class TroubleshootingAgent:
             consul_host: Consul server host
             consul_port: Consul server port
             consul_token: Consul ACL token
+            reasoning_model: Optional stronger model for complex troubleshooting
             verbose: Enable verbose logging
         """
         # Load environment variables
@@ -58,12 +61,19 @@ class TroubleshootingAgent:
             os.environ["OPENAI_API_KEY"] = openai_api_key
         
         self.verbose = verbose
+        self.reasoning_model = reasoning_model or os.getenv("LLM_REASONING_MODEL")
+        self._active_tool_tracker: Optional[Counter] = None
+        self._active_tool_outputs: list = []
         
-        # Initialize LLM (will automatically use OPENAI_API_KEY from environment)
+        # Initialize LLMs (will automatically use OPENAI_API_KEY from environment)
         self.llm = ChatOpenAI(
             model=model,
             temperature=temperature
         )
+        self.reasoning_llm = ChatOpenAI(
+            model=self.reasoning_model,
+            temperature=temperature
+        ) if self.reasoning_model else None
         
         # Initialize tools
         self.k8s_tools = KubernetesTools(namespace=k8s_namespace)
@@ -210,9 +220,32 @@ class TroubleshootingAgent:
     def _wrap_tool_activity(self, activity_message: str, func):
         """Print lightweight tool activity when verbose mode is disabled."""
         def wrapped(input_str: str):
+            normalized_input = (input_str or "").strip()
+            if self._active_tool_tracker is not None:
+                tool_key = f"{activity_message}|{normalized_input}"
+                self._active_tool_tracker[tool_key] += 1
+                if self._active_tool_tracker[tool_key] > 2:
+                    raise RuntimeError(
+                        f"Repeated tool call limit reached for '{activity_message}' with the same input."
+                    )
+
             if not self.verbose:
                 print(f"\n{activity_message}", flush=True)
-            return func(input_str)
+
+            result = func(input_str)
+
+            if self._active_tool_tracker is not None:
+                rendered_result = str(result).strip()
+                if rendered_result:
+                    self._active_tool_outputs.append(
+                        {
+                            "activity": activity_message,
+                            "input": normalized_input,
+                            "output": rendered_result[:500]
+                        }
+                    )
+
+            return result
         return wrapped
 
     def _parse_and_call(self, func, input_str: str):
@@ -243,6 +276,145 @@ class TroubleshootingAgent:
         )
         
         return agent
+
+    def _route_query(self, query: str) -> str:
+        """Route the query to the most appropriate execution path."""
+        normalized = query.lower()
+
+        live_troubleshooting_keywords = [
+            "pod", "pods", "kubectl", "kubernetes", "k8s", "namespace",
+            "logs", "crashloop", "crashloopbackoff", "service health",
+            "consul", "intention", "intentions", "service mesh", "mesh",
+            "cluster members", "member", "health check", "service instance",
+            "service instances", "registered service", "sidecar"
+        ]
+        repo_code_keywords = [
+            "file", "files", "function", "class", "method", "module",
+            "implement", "implementation", "refactor", "test", "tests",
+            "code", "bug", "fix", "patch", "diff", "commit", "readme",
+            "documentation", "doc", "agent.py", "requirements.txt"
+        ]
+        direct_answer_keywords = [
+            "explain", "summarize", "summary", "what does", "why does",
+            "git message", "commit message", "name this", "rename",
+            "recommend", "suggest", "plan", "roadmap", "what should"
+        ]
+
+        if any(keyword in normalized for keyword in live_troubleshooting_keywords):
+            return "live_troubleshooting"
+        if any(keyword in normalized for keyword in repo_code_keywords):
+            return "repo_code_assistance"
+        if any(keyword in normalized for keyword in direct_answer_keywords):
+            return "direct_answer"
+        return "direct_answer"
+
+    def _run_direct_answer(self, query: str) -> str:
+        """Answer simple natural-language requests without tools."""
+        prompt = (
+            "You are a concise technical assistant for Kubernetes, Consul, and Python development tasks. "
+            "Answer the user's request directly without using tools. "
+            "Do not claim to have checked live cluster state or files unless the user provided that information. "
+            "If required context is missing, state exactly what is needed.\n\n"
+            f"User request: {query}"
+        )
+        response = self.llm.invoke(prompt)
+        return getattr(response, "content", str(response))
+
+    def _run_repo_code_assistance(self, query: str) -> str:
+        """Handle repository/code assistance questions without troubleshooting tools."""
+        if any(token in query.lower() for token in ["implement", "patch", "refactor", "change", "update"]):
+            prompt = (
+                "You are helping with repository and code-assistance tasks. "
+                "Provide an implementation-oriented answer with these sections when relevant: "
+                "Approach, Files to update, Risks, and Next step. "
+                "Do not pretend you inspected files or ran commands unless that context is already present. "
+                "If file inspection is required, say so explicitly.\n\n"
+                f"User request: {query}"
+            )
+        else:
+            prompt = (
+                "You are helping with repository and code-assistance tasks. "
+                "Answer directly from the user's provided context. "
+                "Do not pretend you inspected files or ran commands unless that context is already present. "
+                "Provide practical implementation guidance, code reasoning, or concise recommendations. "
+                "If file inspection is required, say so explicitly.\n\n"
+                f"User request: {query}"
+            )
+        response = self.llm.invoke(prompt)
+        return getattr(response, "content", str(response))
+
+    def _build_partial_diagnosis(self) -> str:
+        """Build a concise partial diagnosis from collected tool outputs."""
+        if not self._active_tool_outputs:
+            return (
+                "I couldn't complete a diagnosis within the current limits and didn't gather enough evidence yet. "
+                "Try a narrower question or rerun with --verbose."
+            )
+
+        summarized_outputs = []
+        seen = set()
+        for item in self._active_tool_outputs:
+            key = (item["activity"], item["input"], item["output"])
+            if key in seen:
+                continue
+            seen.add(key)
+            summary_line = f"- {item['activity']}"
+            if item["input"]:
+                summary_line += f" (input: {item['input']})"
+            summary_line += f": {item['output']}"
+            summarized_outputs.append(summary_line)
+            if len(summarized_outputs) >= 3:
+                break
+
+        summary_block = "\n".join(summarized_outputs)
+        return (
+            "I wasn't able to finish a full diagnosis within the current execution limits, but here's what I found so far:\n"
+            f"{summary_block}\n\n"
+            "Try narrowing the question to one workload, service, or namespace for a deeper follow-up."
+        )
+
+    def _is_complex_troubleshooting_query(self, query: str) -> bool:
+        """Determine whether a troubleshooting request should use the stronger reasoning model."""
+        normalized = query.lower()
+        complexity_signals = [
+            "intermittent", "multi-step", "across namespaces", "service mesh",
+            "connectivity", "root cause", "timeline", "multiple services",
+            "consul intentions", "sidecar", "ingress", "egress", "mtls"
+        ]
+        return len(query.split()) > 25 or sum(signal in normalized for signal in complexity_signals) >= 2
+
+    def _run_live_troubleshooting(self, query: str) -> str:
+        """Run the full troubleshooting agent executor."""
+        self._active_tool_tracker = Counter()
+        self._active_tool_outputs = []
+
+        executor = self.agent_executor
+        if self.reasoning_llm and self._is_complex_troubleshooting_query(query):
+            reasoning_agent = create_react_agent(
+                llm=self.reasoning_llm,
+                tools=self.tools,
+                prompt=PromptTemplate.from_template(
+                    SYSTEM_PROMPT + "\n\n" + REACT_PROMPT_TEMPLATE
+                )
+            )
+            executor = AgentExecutor(
+                agent=reasoning_agent,
+                tools=self.tools,
+                verbose=self.verbose,
+                max_iterations=20,
+                max_execution_time=120,
+                handle_parsing_errors=True
+            )
+
+        try:
+            result = executor.invoke({"input": query})
+            return self._format_agent_output(result["output"])
+        except RuntimeError as e:
+            if "Repeated tool call limit reached" in str(e):
+                return self._build_partial_diagnosis()
+            raise
+        finally:
+            self._active_tool_tracker = None
     
     def _format_agent_output(self, output: str) -> str:
         """Replace generic executor stop messages with friendlier language."""
@@ -253,13 +425,13 @@ class TroubleshootingAgent:
         )
 
         if output.strip() == generic_message:
-            return fallback_message
+            return self._build_partial_diagnosis()
 
         if generic_message in output:
-            return output.replace(
-                generic_message,
-                "I wasn't able to finish a full diagnosis within the current execution limits, but here's what I found so far."
-            )
+            replacement = self._build_partial_diagnosis()
+            if "didn't gather enough evidence yet" in replacement:
+                return replacement
+            return replacement
         return output
 
     def _status_line_for_response(self, response: str) -> str:
@@ -275,7 +447,7 @@ class TroubleshootingAgent:
 
     def run(self, query: str) -> str:
         """
-        Run the agent with a troubleshooting query.
+        Run the agent with an appropriately routed execution path.
         
         Args:
             query: The troubleshooting question or issue description
@@ -284,15 +456,19 @@ class TroubleshootingAgent:
             Agent's response with diagnosis and recommendations
         """
         try:
-            result = self.agent_executor.invoke({"input": query})
-            return self._format_agent_output(result["output"])
+            route = self._route_query(query)
+
+            if route == "direct_answer":
+                return self._run_direct_answer(query)
+
+            if route == "repo_code_assistance":
+                return self._run_repo_code_assistance(query)
+
+            return self._run_live_troubleshooting(query)
         except Exception as e:
             message = str(e)
             if "iteration limit" in message.lower() or "time limit" in message.lower():
-                return (
-                    "I wasn't able to finish a full diagnosis within the current execution limits. "
-                    "Please try a narrower question, enable --verbose for more detail, or rerun with a more specific target."
-                )
+                return self._build_partial_diagnosis()
             return f"Error running agent: {message}"
     
     def _run_with_spinner(self, query: str) -> str:
@@ -365,6 +541,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="Kubernetes & Consul Troubleshooting Agent")
     parser.add_argument("--model", default="gpt-4o-mini", help="OpenAI model to use")
+    parser.add_argument("--reasoning-model", help="Optional stronger model for complex live troubleshooting")
     parser.add_argument("--namespace", default="default", help="Default Kubernetes namespace")
     parser.add_argument("--consul-host", default="localhost", help="Consul server host")
     parser.add_argument("--consul-port", type=int, default=8500, help="Consul server port")
@@ -376,6 +553,7 @@ def main():
     # Create agent
     agent = TroubleshootingAgent(
         model=args.model,
+        reasoning_model=args.reasoning_model,
         k8s_namespace=args.namespace,
         consul_host=args.consul_host,
         consul_port=args.consul_port,
