@@ -1,0 +1,194 @@
+# Quick Start Guide
+
+Get up and running with the Kubernetes & Consul Troubleshooting Agent in 5 minutes!
+
+## Prerequisites Check
+
+Before starting, ensure you have:
+- ✅ Python 3.9+ installed (`python3 --version`)
+- ✅ Access to a Kubernetes cluster (`kubectl cluster-info`)
+- ✅ OpenAI API key ([Get one here](https://platform.openai.com/api-keys))
+- ⚠️ Optional: Access to Consul cluster (for Consul features)
+
+## Step 1: Setup (2 minutes)
+
+```bash
+# Navigate to the project directory
+cd k8s-consul-troubleshooting-agent
+
+# Create virtual environment
+python3 -m venv venv
+
+# Activate virtual environment
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+## Step 2: Configure (1 minute)
+
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and add your OpenAI API key
+# You can use any text editor
+nano .env  # or vim, code, etc.
+```
+
+Minimum required configuration in `.env`:
+```bash
+OPENAI_API_KEY=sk-your-actual-api-key-here
+```
+
+## Step 3: Run (30 seconds)
+
+```bash
+# Start the interactive agent
+python -m src.agent
+```
+
+You should see:
+```
+======================================================================
+Kubernetes & Consul Troubleshooting Agent
+======================================================================
+
+I'm here to help you troubleshoot Kubernetes and Consul issues.
+Type 'exit' or 'quit' to end the session.
+
+You: 
+```
+
+## Step 4: Try It Out! (1 minute)
+
+### Example 1: List Pods
+```
+You: List all pods in the default namespace
+
+Agent: [Uses list_pods tool]
+=== Pods in namespace 'default' ===
+...
+```
+
+### Example 2: Check Pod Status
+```
+You: Check the status of pod my-app-xyz123
+
+Agent: [Uses get_pod_status tool]
+=== Pod Status: my-app-xyz123 ===
+...
+```
+
+### Example 3: Troubleshoot an Issue
+```
+You: My pod keeps crashing. Can you help?
+
+Agent: I'll help you diagnose the issue. What's the name of the pod?
+
+You: web-app-7d8f9c
+
+Agent: [Systematically checks status, logs, and events]
+Based on the logs, your pod is experiencing...
+```
+
+## Common Commands
+
+### Interactive Mode (Recommended)
+```bash
+python -m src.agent
+```
+
+### Single Query Mode
+```bash
+python -m src.agent --query "Why is my pod in CrashLoopBackOff?"
+```
+
+### With Custom Namespace
+```bash
+python -m src.agent --namespace production
+```
+
+### With Verbose Logging (for debugging)
+```bash
+python -m src.agent --verbose
+```
+
+### With Custom Consul Server
+```bash
+python -m src.agent --consul-host consul.example.com --consul-port 8500
+```
+
+## Troubleshooting Setup Issues
+
+### Issue: "No module named 'langchain'"
+**Solution:** Make sure you activated the virtual environment and installed dependencies:
+```bash
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### Issue: "OpenAI API key must be provided"
+**Solution:** Check your `.env` file has the correct API key:
+```bash
+cat .env | grep OPENAI_API_KEY
+```
+
+### Issue: "Failed to initialize Kubernetes client"
+**Solution:** Verify kubectl is configured:
+```bash
+kubectl cluster-info
+```
+
+### Issue: "Failed to initialize Consul client"
+**Solution:** This is optional. If you don't have Consul, the K8s features will still work. To disable Consul errors, you can modify the code or ensure Consul is accessible.
+
+## What Can I Ask?
+
+### Kubernetes Questions
+- "List all pods in namespace production"
+- "Check the status of pod xyz-123"
+- "Show me logs for pod abc-456"
+- "Why is my pod in CrashLoopBackOff?"
+- "Describe pod my-app-789"
+
+### Consul Questions
+- "List all services in Consul"
+- "Check the health of service web-api"
+- "Show me all Consul intentions"
+- "Can service A connect to service B?"
+- "Get all instances of service payment-api"
+
+### General Troubleshooting
+- "My application is not working, can you help?"
+- "Service X cannot connect to service Y"
+- "Why are my pods not starting?"
+
+## Next Steps
+
+1. **Read the full README**: `README.md` for detailed documentation
+2. **Explore examples**: `examples/troubleshooting_scenarios.md` for common scenarios
+3. **Customize**: Modify `config/agent_config.yaml` for your needs
+4. **Learn**: The agent uses LangChain's ReAct pattern - great for learning!
+
+## Getting Help
+
+If you encounter issues:
+1. Check the error message carefully
+2. Verify your environment setup
+3. Try with `--verbose` flag for more details
+4. Review the examples in `examples/troubleshooting_scenarios.md`
+
+## Tips for Best Results
+
+1. **Be specific**: Include pod names, namespaces, and error messages
+2. **Provide context**: Mention what you've already tried
+3. **Ask follow-ups**: The agent can dive deeper based on initial findings
+4. **Use natural language**: No need for exact commands, just describe the issue
+
+---
+
+**You're all set! Start troubleshooting! 🚀**
+
+For more advanced usage, see the full [README.md](README.md)
