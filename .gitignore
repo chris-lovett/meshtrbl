@@ -28,6 +28,11 @@ env/
 # Environment variables
 .env
 
+# Local Consul TLS materials
+consul-agent-ca-key.pem
+consul-agent-ca.pem
+consul-ca-from-cluster.pem
+
 # IDE
 .vscode/
 .idea/
