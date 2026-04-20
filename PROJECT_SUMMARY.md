@@ -1,8 +1,18 @@
 # Project Summary: Kubernetes & Consul Troubleshooting Agent
 
-## 🎉 Phase 1 Complete!
+## 🎉 Phase 1 Complete! Phase 2 In Progress!
 
-You now have a fully functional AI-powered troubleshooting agent for Kubernetes and HashiCorp Consul service mesh!
+You now have a fully functional AI-powered troubleshooting agent for Kubernetes and HashiCorp Consul service mesh with **conversation memory** (Phase 2 Feature #1)!
+
+### 🆕 Latest Update: Conversation Memory (Phase 2.1)
+
+The agent now includes **conversation memory** to maintain context across multiple questions in a session:
+- ✅ Remembers previous discussions
+- ✅ Enables natural follow-up questions
+- ✅ Provides better context-aware responses
+- ✅ Interactive memory management commands (`/clear`, `/history`, `/summary`)
+
+📖 **[Read the Memory Feature documentation](MEMORY_FEATURE.md)** for complete details.
 
 ## What We Built
 

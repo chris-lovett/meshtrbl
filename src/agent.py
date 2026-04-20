@@ -7,13 +7,15 @@ import sys
 import threading
 import time
 from collections import Counter
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from dotenv import load_dotenv
 
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.tools import Tool
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
+from langchain.memory import ConversationBufferMemory
+from langchain_core.messages import BaseMessage
 
 from .tools import KubernetesTools, ConsulTools
 from .prompts.system_prompts import SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
@@ -33,7 +35,8 @@ class TroubleshootingAgent:
                  consul_port: int = 8500,
                  consul_token: Optional[str] = None,
                  reasoning_model: Optional[str] = None,
-                 verbose: bool = False):
+                 verbose: bool = False,
+                 enable_memory: bool = True):
         """
         Initialize the troubleshooting agent.
         
@@ -47,6 +50,7 @@ class TroubleshootingAgent:
             consul_token: Consul ACL token
             reasoning_model: Optional stronger model for complex troubleshooting
             verbose: Enable verbose logging
+            enable_memory: Enable conversation memory (default: True)
         """
         # Load environment variables
         load_dotenv()
@@ -64,6 +68,14 @@ class TroubleshootingAgent:
         self.reasoning_model = reasoning_model or os.getenv("LLM_REASONING_MODEL")
         self._active_tool_tracker: Optional[Counter] = None
         self._active_tool_outputs: list = []
+        self.enable_memory = enable_memory
+        
+        # Initialize conversation memory
+        self.memory = ConversationBufferMemory(
+            memory_key="chat_history",
+            return_messages=True,
+            output_key="output"
+        ) if enable_memory else None
         
         # Initialize LLMs (will automatically use OPENAI_API_KEY from environment)
         self.llm = ChatOpenAI(
@@ -93,6 +105,7 @@ class TroubleshootingAgent:
         self.agent_executor = AgentExecutor(
             agent=self.agent,
             tools=self.tools,
+            memory=self.memory,
             verbose=verbose,
             max_iterations=20,
             max_execution_time=120,
@@ -400,6 +413,7 @@ class TroubleshootingAgent:
             executor = AgentExecutor(
                 agent=reasoning_agent,
                 tools=self.tools,
+                memory=self.memory,
                 verbose=self.verbose,
                 max_iterations=20,
                 max_execution_time=120,
@@ -415,6 +429,58 @@ class TroubleshootingAgent:
             raise
         finally:
             self._active_tool_tracker = None
+    
+    def clear_memory(self):
+        """Clear the conversation memory."""
+        if self.memory:
+            self.memory.clear()
+            if self.verbose:
+                print("Conversation memory cleared.")
+    
+    def get_conversation_history(self) -> List[BaseMessage]:
+        """
+        Get the conversation history.
+        
+        Returns:
+            List of conversation messages
+        """
+        if not self.memory:
+            return []
+        
+        return self.memory.chat_memory.messages
+    
+    def get_conversation_summary(self) -> str:
+        """
+        Get a human-readable summary of the conversation history.
+        
+        Returns:
+            Formatted conversation history
+        """
+        if not self.memory:
+            return "Memory is disabled for this session."
+        
+        messages = self.get_conversation_history()
+        if not messages:
+            return "No conversation history yet."
+        
+        summary = []
+        for i, msg in enumerate(messages, 1):
+            role = "User" if msg.type == "human" else "Agent"
+            content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
+            summary.append(f"{i}. {role}: {content}")
+        
+        return "\n".join(summary)
+    
+    def save_context(self, inputs: Dict[str, str], outputs: Dict[str, str]):
+        """
+        Manually save context to memory (useful for non-agent interactions).
+        
+        Args:
+            inputs: Input dictionary with 'input' key
+            outputs: Output dictionary with 'output' key
+        """
+        if self.memory:
+            self.memory.save_context(inputs, outputs)
     
     def _format_agent_output(self, output: str) -> str:
         """Replace generic executor stop messages with friendlier language."""
@@ -511,7 +577,15 @@ class TroubleshootingAgent:
         print("Kubernetes & Consul Troubleshooting Agent")
         print("=" * 70)
         print("\nI'm here to help you troubleshoot Kubernetes and Consul issues.")
-        print("Type 'exit' or 'quit' to end the session.\n")
+        
+        if self.enable_memory:
+            print("💾 Conversation memory is ENABLED - I'll remember our discussion!")
+            print("\nSpecial commands:")
+            print("  /clear    - Clear conversation memory")
+            print("  /history  - Show conversation history")
+            print("  /summary  - Show conversation summary")
+        
+        print("\nType 'exit' or 'quit' to end the session.\n")
         
         while True:
             try:
@@ -523,6 +597,31 @@ class TroubleshootingAgent:
                 
                 if not user_input:
                     continue
+                
+                # Handle special commands
+                if user_input.startswith('/'):
+                    if user_input.lower() == '/clear':
+                        self.clear_memory()
+                        print("✓ Conversation memory cleared.")
+                        continue
+                    elif user_input.lower() == '/history':
+                        history = self.get_conversation_history()
+                        if not history:
+                            print("No conversation history yet.")
+                        else:
+                            print(f"\n📜 Conversation History ({len(history)} messages):")
+                            for i, msg in enumerate(history, 1):
+                                role = "You" if msg.type == "human" else "Agent"
+                                print(f"\n{i}. {role}:")
+                                print(f"   {msg.content[:200]}{'...' if len(msg.content) > 200 else ''}")
+                        continue
+                    elif user_input.lower() == '/summary':
+                        print(f"\n📋 Conversation Summary:\n{self.get_conversation_summary()}")
+                        continue
+                    else:
+                        print(f"Unknown command: {user_input}")
+                        print("Available commands: /clear, /history, /summary")
+                        continue
                 
                 response = self._run_with_spinner(user_input)
                 print(f"\nAgent: {response}")
@@ -547,6 +646,7 @@ def main():
     parser.add_argument("--consul-port", type=int, default=8500, help="Consul server port")
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--query", help="Single query to run (non-interactive mode)")
+    parser.add_argument("--no-memory", action="store_true", help="Disable conversation memory")
     
     args = parser.parse_args()
     
@@ -557,7 +657,8 @@ def main():
         k8s_namespace=args.namespace,
         consul_host=args.consul_host,
         consul_port=args.consul_port,
-        verbose=args.verbose
+        verbose=args.verbose,
+        enable_memory=not args.no_memory
     )
     
     # Run in appropriate mode

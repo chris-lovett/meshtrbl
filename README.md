@@ -4,7 +4,7 @@ An AI-powered agent built with LangChain and OpenAI GPT-4 to help troubleshoot K
 
 ## 🎯 Features
 
-### Phase 1: Basic Agent (Current)
+### Phase 1: Basic Agent ✅ Complete
 - ✅ Kubernetes pod inspection and diagnostics
 - ✅ Pod logs retrieval and analysis
 - ✅ Consul service discovery and health checks
@@ -12,8 +12,8 @@ An AI-powered agent built with LangChain and OpenAI GPT-4 to help troubleshoot K
 - ✅ Interactive chat interface
 - ✅ ReAct reasoning pattern for systematic troubleshooting
 
-### Phase 2: Enhanced Intelligence (Prioritized for Responsiveness + Capability)
-- 🔄 Conversation memory and session context reuse
+### Phase 2: Enhanced Intelligence (In Progress)
+- ✅ **Conversation memory and session context reuse** 🎉 NEW!
 - 🔄 Common error pattern recognition for faster diagnosis
 - 🔄 Intent classification and direct routing for common troubleshooting flows
 - 🔄 Cached tool results within a troubleshooting session
@@ -151,12 +151,24 @@ Do not commit extracted CA files into git. Keep them local and ignored.
 
 ### Running the Agent
 
-#### Interactive Mode (Recommended for learning)
+#### Interactive Mode with Conversation Memory (Recommended)
 ```bash
 python -m src.agent
 ```
 
-This starts an interactive chat session where you can ask troubleshooting questions.
+This starts an interactive chat session with **conversation memory enabled** by default. The agent will remember your discussion and provide better context-aware responses!
+
+**New in Phase 2:** Memory commands available in interactive mode:
+- `/clear` - Clear conversation memory
+- `/history` - Show full conversation history
+- `/summary` - Show conversation summary
+
+📖 **[Read the full Memory Feature documentation](MEMORY_FEATURE.md)** for detailed usage examples and best practices.
+
+#### Interactive Mode without Memory
+```bash
+python -m src.agent --no-memory
+```
 
 #### Single Query Mode
 ```bash
