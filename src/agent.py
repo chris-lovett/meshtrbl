@@ -43,7 +43,9 @@ class TroubleshootingAgent:
                  enable_intent_routing: bool = True,
                  enable_cache: bool = True,
                  cache_ttl: int = 300,
-                 cache_max_size: int = 100):
+                 cache_max_size: int = 100,
+                 max_iterations: int = 35,
+                 max_execution_time: int = 300):
         """
         Initialize the troubleshooting agent.
         
@@ -62,6 +64,8 @@ class TroubleshootingAgent:
             enable_cache: Enable session-scoped caching (default: True)
             cache_ttl: Default cache TTL in seconds (default: 300)
             cache_max_size: Maximum cache entries (default: 100)
+            max_iterations: Maximum number of tool calls per query (default: 35)
+            max_execution_time: Maximum execution time in seconds (default: 300 = 5 minutes)
         """
         # Load environment variables
         load_dotenv()
@@ -82,6 +86,8 @@ class TroubleshootingAgent:
         self.enable_memory = enable_memory
         self.enable_intent_routing = enable_intent_routing
         self.enable_cache = enable_cache
+        self.max_iterations = max_iterations
+        self.max_execution_time = max_execution_time
         
         # Initialize session cache
         self.cache = SessionCache(
@@ -127,8 +133,8 @@ class TroubleshootingAgent:
             tools=self.tools,
             memory=self.memory,
             verbose=verbose,
-            max_iterations=20,
-            max_execution_time=120,
+            max_iterations=self.max_iterations,
+            max_execution_time=self.max_execution_time,
             handle_parsing_errors=True
         )
     
@@ -144,10 +150,11 @@ class TroubleshootingAgent:
                     lambda x: self._parse_and_call(self.k8s_tools.get_pod_status, x),
                     tool_name="get_pod_status"
                 ),
-                description="""Get the status of a Kubernetes pod.
-                Input should be: pod_name or pod_name,namespace
+                description="""Get the status of a specific Kubernetes pod.
+                Input REQUIRED: pod_name or pod_name,namespace
                 Example: "my-app-pod" or "my-app-pod,production"
-                Use this to check if a pod is running, pending, or has errors."""
+                Use this to check if a specific pod is running, pending, or has errors.
+                NOTE: To check ALL pods, use list_pods instead."""
             ),
             Tool(
                 name="get_pod_logs",
@@ -156,10 +163,10 @@ class TroubleshootingAgent:
                     lambda x: self._parse_and_call(self.k8s_tools.get_pod_logs, x),
                     tool_name="get_pod_logs"
                 ),
-                description="""Get logs from a Kubernetes pod.
-                Input should be: pod_name or pod_name,namespace or pod_name,namespace,container
+                description="""Get logs from a specific Kubernetes pod.
+                Input REQUIRED: pod_name or pod_name,namespace or pod_name,namespace,container
                 Example: "my-app-pod" or "my-app-pod,production" or "my-app-pod,production,app-container"
-                Use this to investigate application errors or crashes."""
+                Use this to investigate application errors or crashes in a specific pod."""
             ),
             Tool(
                 name="list_pods",
@@ -169,9 +176,9 @@ class TroubleshootingAgent:
                     tool_name="list_pods"
                 ),
                 description="""List all pods in a namespace.
-                Input should be: namespace or namespace,label_selector
-                Example: "default" or "production,app=myapp"
-                Use this to see all pods and their status."""
+                Input can be: empty (uses default namespace), namespace, or namespace,label_selector
+                Example: "" or "default" or "production,app=myapp"
+                Use this to see all pods and their status, or to check if all pods are healthy."""
             ),
             Tool(
                 name="describe_pod",
@@ -180,10 +187,10 @@ class TroubleshootingAgent:
                     lambda x: self._parse_and_call(self.k8s_tools.describe_pod, x),
                     tool_name="describe_pod"
                 ),
-                description="""Get detailed information about a pod (similar to kubectl describe).
-                Input should be: pod_name or pod_name,namespace
+                description="""Get detailed information about a specific pod (similar to kubectl describe).
+                Input REQUIRED: pod_name or pod_name,namespace
                 Example: "my-app-pod" or "my-app-pod,production"
-                Use this to see events, configuration, and detailed status."""
+                Use this to see events, configuration, and detailed status of a specific pod."""
             ),
             
             # Consul tools
@@ -195,7 +202,7 @@ class TroubleshootingAgent:
                     tool_name="list_consul_services"
                 ),
                 description="""List all services registered in Consul.
-                Input: empty string or datacenter name
+                Input: empty string "" (datacenter parameter not currently used)
                 Use this to see what services are available in the service mesh."""
             ),
             Tool(
@@ -205,10 +212,10 @@ class TroubleshootingAgent:
                     lambda x: self.consul_tools.get_service_health(x),
                     tool_name="get_service_health"
                 ),
-                description="""Get health status of a Consul service.
-                Input should be: service_name
+                description="""Get health status of a specific Consul service.
+                Input REQUIRED: service_name
                 Example: "web-service"
-                Use this to check if a service is healthy and see health check details."""
+                Use this to check if a specific service is healthy and see health check details."""
             ),
             Tool(
                 name="get_service_instances",
@@ -217,10 +224,10 @@ class TroubleshootingAgent:
                     lambda x: self.consul_tools.get_service_instances(x),
                     tool_name="get_service_instances"
                 ),
-                description="""Get all instances of a Consul service.
-                Input should be: service_name
+                description="""Get all instances of a specific Consul service.
+                Input REQUIRED: service_name
                 Example: "web-service"
-                Use this to see where service instances are running."""
+                Use this to see where instances of a specific service are running."""
             ),
             Tool(
                 name="list_consul_intentions",
@@ -230,7 +237,7 @@ class TroubleshootingAgent:
                     tool_name="list_consul_intentions"
                 ),
                 description="""List all Consul Connect intentions (service-to-service access rules).
-                Input: empty string
+                Input: empty string ""
                 Use this to see which services can communicate with each other."""
             ),
             Tool(
@@ -240,8 +247,8 @@ class TroubleshootingAgent:
                     lambda x: self._parse_and_call(self.consul_tools.check_intention, x),
                     tool_name="check_consul_intention"
                 ),
-                description="""Check if traffic is allowed between two services.
-                Input should be: source_service,destination_service
+                description="""Check if traffic is allowed between two specific services.
+                Input REQUIRED: source_service,destination_service
                 Example: "web,api"
                 Use this to troubleshoot service-to-service communication issues."""
             ),
@@ -253,7 +260,7 @@ class TroubleshootingAgent:
                     tool_name="get_consul_members"
                 ),
                 description="""Get Consul cluster members.
-                Input: empty string
+                Input: empty string ""
                 Use this to check cluster health and member status."""
             ),
             
@@ -573,8 +580,8 @@ class TroubleshootingAgent:
                 tools=self.tools,
                 memory=self.memory,
                 verbose=self.verbose,
-                max_iterations=20,
-                max_execution_time=120,
+                max_iterations=self.max_iterations,
+                max_execution_time=self.max_execution_time,
                 handle_parsing_errors=True
             )
 
@@ -976,6 +983,8 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="Disable session-scoped caching")
     parser.add_argument("--cache-ttl", type=int, default=300, help="Cache TTL in seconds (default: 300)")
     parser.add_argument("--cache-size", type=int, default=100, help="Maximum cache entries (default: 100)")
+    parser.add_argument("--max-iterations", type=int, default=35, help="Maximum tool calls per query (default: 35)")
+    parser.add_argument("--max-time", type=int, default=300, help="Maximum execution time in seconds (default: 300)")
     
     args = parser.parse_args()
     
@@ -991,7 +1000,9 @@ def main():
         enable_intent_routing=not args.no_intent_routing,
         enable_cache=not args.no_cache,
         cache_ttl=args.cache_ttl,
-        cache_max_size=args.cache_size
+        cache_max_size=args.cache_size,
+        max_iterations=args.max_iterations,
+        max_execution_time=args.max_time
     )
     
     # Run in appropriate mode
