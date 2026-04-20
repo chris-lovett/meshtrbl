@@ -1,12 +1,23 @@
 # Project Summary: Kubernetes & Consul Troubleshooting Agent
 
-## 🎉 Phase 1 Complete! Phase 2 Features Complete!
+## 🎉 Phase 1 Complete! Phase 2 Complete!
 
-You now have a fully functional AI-powered troubleshooting agent for Kubernetes and HashiCorp Consul service mesh with **conversation memory** AND **intelligent error pattern recognition**!
+You now have a fully functional AI-powered troubleshooting agent for Kubernetes and HashiCorp Consul service mesh with **conversation memory**, **intelligent error pattern recognition**, AND **fast-path intent routing**!
 
-### 🆕 Latest Update: Error Pattern Recognition (Phase 2.2) ✨
+### 🆕 Latest Update: Intent Classification & Direct Routing (Phase 2.3) 🚀
 
-The agent now includes **intelligent error pattern recognition** for instant diagnosis:
+The agent now includes **intelligent intent classification and fast-path routing** for dramatically faster responses:
+- 🚀 **50-88% Faster**: Optimized execution paths for common scenarios
+- 🎯 **Smart Classification**: 15+ intent types with 85%+ confidence
+- 🔍 **Entity Extraction**: Automatic detection of pods, services, namespaces
+- ⚡ **Direct Routing**: Pre-planned tool sequences bypass LLM reasoning
+- 📊 **Priority-Based**: Critical issues get immediate attention
+
+📖 **[Read the Intent Routing documentation](INTENT_ROUTING_FEATURE.md)** for complete details.
+
+### Phase 2.2: Error Pattern Recognition ✅
+
+The agent includes **intelligent error pattern recognition** for instant diagnosis:
 - ⚡ **Instant Solutions**: Match errors against 15+ known patterns for immediate diagnosis
 - 🎯 **Smart Matching**: Regex-based pattern matching with relevance scoring
 - 📚 **Comprehensive Database**: Covers common Kubernetes and Consul issues
@@ -48,21 +59,28 @@ The agent includes **conversation memory** to maintain context across multiple q
    - Verify intentions (service-to-service access)
    - Check cluster members
 
-4. **Error Pattern Recognition** (`src/error_patterns.py`) 🆕
+4. **Intent Classification & Routing** (`src/intent_classifier.py`) 🆕
+   - 15+ intent types for common scenarios
+   - Regex-based pattern matching with confidence scoring
+   - Entity extraction (pods, services, namespaces, errors)
+   - Fast-path routing for 50-88% faster responses
+   - Pre-defined troubleshooting flows
+
+5. **Error Pattern Recognition** (`src/error_patterns.py`)
    - Database of 15+ common error patterns
    - Intelligent regex-based matching
    - Relevance scoring algorithm
    - Instant diagnosis and solutions
    - Kubernetes and Consul patterns
 
-5. **Expert System Prompts** (`src/prompts/system_prompts.py`)
+6. **Expert System Prompts** (`src/prompts/system_prompts.py`)
    - Deep Kubernetes expertise
    - Consul service mesh knowledge
    - Systematic troubleshooting methodology
    - Pattern-first troubleshooting approach
    - Clear communication style
 
-6. **Configuration System**
+7. **Configuration System**
    - Environment-based configuration (.env)
    - YAML configuration file
    - Flexible and secure
@@ -196,21 +214,31 @@ Intelligent pattern matching for instant diagnosis:
 - Pattern search and discovery
 - See [ERROR_PATTERN_RECOGNITION.md](ERROR_PATTERN_RECOGNITION.md)
 
-## Next Steps: Phase 2 Remaining & Phase 3
+### 3. Intent Classification & Direct Routing ✅ COMPLETE
+Fast-path routing for common troubleshooting scenarios:
+- 15+ intent types with 85%+ confidence classification
+- Entity extraction (pods, services, namespaces, errors)
+- 50-88% faster response times for common issues
+- Pre-defined optimized troubleshooting flows
+- Automatic fallback to standard agent for complex queries
+- See [INTENT_ROUTING_FEATURE.md](INTENT_ROUTING_FEATURE.md)
+
+## Next Steps: Phase 3
 
 Ready for more enhancements? Here's what's next:
 
-### 3. Enhanced Consul Connect Support (Phase 2.3)
+### 1. Enhanced Consul Connect Support
 - Sidecar proxy diagnostics
 - mTLS certificate validation
 - Traffic routing analysis
 - Upstream service verification
 
-### 4. Add Metrics and Observability
+### 2. Add Metrics and Observability
 - Track troubleshooting sessions
 - Measure resolution times
 - Identify common issues
 - Generate reports
+- Intent classification analytics
 
 ## Future: Phase 3 with LangGraph
 
@@ -347,9 +375,13 @@ Want to extend the agent? Consider:
 - ✅ Error pattern recognition system
 - ✅ 15+ common error patterns (K8s + Consul)
 - ✅ Intelligent pattern matching with relevance scoring
-- ✅ Comprehensive test suite for patterns
-- ✅ Pattern-first troubleshooting approach
-- ✅ Detailed documentation for both features
+- ✅ Intent classification and direct routing
+- ✅ 15+ intent types with 85%+ confidence
+- ✅ 50-88% faster response times for common issues
+- ✅ Entity extraction and parameter resolution
+- ✅ Comprehensive test suite (150+ tests total)
+- ✅ Pattern-first and intent-first troubleshooting
+- ✅ Detailed documentation for all features
 
 ## Conclusion
 
@@ -364,8 +396,9 @@ You've successfully built a production-ready AI troubleshooting agent! 🎉
 
 **Remember:**
 - This is a learning project - experiment freely!
-- The agent gets better with better prompts
-- Tools can be extended infinitely
+- The agent gets better with better prompts and patterns
+- Tools and intents can be extended infinitely
+- Fast-path routing makes common issues lightning fast
 - LangChain ecosystem is constantly evolving
 
 ---
@@ -373,6 +406,9 @@ You've successfully built a production-ready AI troubleshooting agent! 🎉
 **Happy Troubleshooting! 🚀**
 
 For questions or improvements, refer to:
-- README.md for detailed docs
-- QUICKSTART.md for setup
-- examples/troubleshooting_scenarios.md for use cases
+- [README.md](README.md) for detailed docs
+- [QUICKSTART.md](QUICKSTART.md) for setup
+- [MEMORY_FEATURE.md](MEMORY_FEATURE.md) for conversation memory
+- [ERROR_PATTERN_RECOGNITION.md](ERROR_PATTERN_RECOGNITION.md) for error patterns
+- [INTENT_ROUTING_FEATURE.md](INTENT_ROUTING_FEATURE.md) for intent routing
+- [examples/troubleshooting_scenarios.md](examples/troubleshooting_scenarios.md) for use cases

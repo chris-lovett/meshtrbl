@@ -20,6 +20,7 @@ from langchain_core.messages import BaseMessage
 from .tools import KubernetesTools, ConsulTools
 from .prompts.system_prompts import SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
 from .error_patterns import pattern_matcher, format_pattern_match
+from .intent_classifier import intent_classifier, IntentType
 
 
 class TroubleshootingAgent:
@@ -37,7 +38,8 @@ class TroubleshootingAgent:
                  consul_token: Optional[str] = None,
                  reasoning_model: Optional[str] = None,
                  verbose: bool = False,
-                 enable_memory: bool = True):
+                 enable_memory: bool = True,
+                 enable_intent_routing: bool = True):
         """
         Initialize the troubleshooting agent.
         
@@ -52,6 +54,7 @@ class TroubleshootingAgent:
             reasoning_model: Optional stronger model for complex troubleshooting
             verbose: Enable verbose logging
             enable_memory: Enable conversation memory (default: True)
+            enable_intent_routing: Enable intent classification and fast-path routing (default: True)
         """
         # Load environment variables
         load_dotenv()
@@ -70,6 +73,7 @@ class TroubleshootingAgent:
         self._active_tool_tracker: Optional[Counter] = None
         self._active_tool_outputs: list = []
         self.enable_memory = enable_memory
+        self.enable_intent_routing = enable_intent_routing
         
         # Initialize conversation memory
         self.memory = ConversationBufferMemory(
@@ -544,6 +548,100 @@ class TroubleshootingAgent:
         finally:
             self._active_tool_tracker = None
     
+    def _execute_fast_path(self, query: str, intent) -> str:
+        """
+        Execute a fast-path troubleshooting flow based on classified intent.
+        
+        Args:
+            query: User query
+            intent: Classified intent object
+        
+        Returns:
+            Diagnosis and recommendations
+        """
+        if not self.verbose:
+            print(f"\n🚀 Fast-path routing: {intent.suggested_flow}", flush=True)
+            print(f"   Confidence: {intent.confidence:.0%} | Priority: {intent.priority}", flush=True)
+        
+        flow = intent_classifier.get_flow(intent.intent_type)
+        if not flow:
+            # Fallback to standard agent
+            return self._run_live_troubleshooting(query)
+        
+        results = []
+        results.append(f"# {flow.name}")
+        results.append(f"*{flow.description}*\n")
+        
+        # Execute each step in the flow
+        for step in flow.steps:
+            tool_name = step["tool"]
+            param_template = step["param"]
+            
+            # Resolve parameters from entities
+            param = self._resolve_flow_parameters(param_template, intent.entities, query)
+            
+            # Find and execute the tool
+            tool = next((t for t in self.tools if t.name == tool_name), None)
+            if not tool:
+                results.append(f"\n⚠️ Tool '{tool_name}' not found, skipping...")
+                continue
+            
+            try:
+                if not self.verbose:
+                    print(f"   → Executing: {tool_name}", flush=True)
+                
+                result = tool.func(param)
+                results.append(f"\n## Step: {tool.description}")
+                results.append(f"```\n{result}\n```")
+            except Exception as e:
+                results.append(f"\n⚠️ Error executing {tool_name}: {str(e)}")
+        
+        # Add summary
+        results.append(f"\n---")
+        results.append(f"**Fast-path execution completed** ({flow.expected_duration})")
+        results.append(f"Intent: {intent.intent_type.value} (confidence: {intent.confidence:.0%})")
+        
+        return "\n".join(results)
+    
+    def _resolve_flow_parameters(self, param_template: str, entities: Dict[str, str], query: str) -> str:
+        """
+        Resolve flow parameters from entities and query.
+        
+        Args:
+            param_template: Parameter template (e.g., "pod_name", "source,destination")
+            entities: Extracted entities
+            query: Original query
+        
+        Returns:
+            Resolved parameter string
+        """
+        if not param_template:
+            return ""
+        
+        # Split template into parts
+        parts = [p.strip() for p in param_template.split(',')]
+        resolved = []
+        
+        for part in parts:
+            if part in entities:
+                # Direct entity match
+                resolved.append(entities[part])
+            elif part == "error_text":
+                # Extract error text from query or entities
+                if "error_text" in entities:
+                    resolved.append(entities["error_text"])
+                else:
+                    # Use the whole query as error text
+                    resolved.append(query)
+            elif part == "status_condition":
+                # Extract status condition from query
+                resolved.append(query)
+            else:
+                # Try to find in query or use empty
+                resolved.append("")
+        
+        return ",".join(resolved)
+    
     def clear_memory(self):
         """Clear the conversation memory."""
         if self.memory:
@@ -636,6 +734,23 @@ class TroubleshootingAgent:
             Agent's response with diagnosis and recommendations
         """
         try:
+            # First, check if intent routing is enabled and classify the query
+            if self.enable_intent_routing:
+                intent = intent_classifier.classify(query)
+                
+                if self.verbose:
+                    print(f"\n[Intent Classification]")
+                    print(f"  Type: {intent.intent_type.value}")
+                    print(f"  Confidence: {intent.confidence:.0%}")
+                    print(f"  Priority: {intent.priority}")
+                    print(f"  Entities: {intent.entities}")
+                    print(f"  Suggested Flow: {intent.suggested_flow}")
+                
+                # Use fast-path if conditions are met
+                if intent_classifier.should_use_fast_path(intent):
+                    return self._execute_fast_path(query, intent)
+            
+            # Fall back to standard routing
             route = self._route_query(query)
 
             if route == "direct_answer":
@@ -694,6 +809,11 @@ class TroubleshootingAgent:
         
         if self.enable_memory:
             print("💾 Conversation memory is ENABLED - I'll remember our discussion!")
+        
+        if self.enable_intent_routing:
+            print("🚀 Intent routing is ENABLED - Fast-path for common issues!")
+        
+        if self.enable_memory:
             print("\nSpecial commands:")
             print("  /clear    - Clear conversation memory")
             print("  /history  - Show conversation history")
@@ -761,6 +881,7 @@ def main():
     parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
     parser.add_argument("--query", help="Single query to run (non-interactive mode)")
     parser.add_argument("--no-memory", action="store_true", help="Disable conversation memory")
+    parser.add_argument("--no-intent-routing", action="store_true", help="Disable intent classification and fast-path routing")
     
     args = parser.parse_args()
     
@@ -772,7 +893,8 @@ def main():
         consul_host=args.consul_host,
         consul_port=args.consul_port,
         verbose=args.verbose,
-        enable_memory=not args.no_memory
+        enable_memory=not args.no_memory,
+        enable_intent_routing=not args.no_intent_routing
     )
     
     # Run in appropriate mode
