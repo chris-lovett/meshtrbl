@@ -13,12 +13,12 @@ An AI-powered agent built with LangChain and OpenAI GPT-4 to help troubleshoot K
 - ✅ ReAct reasoning pattern for systematic troubleshooting
 
 ### Phase 2: Enhanced Intelligence (In Progress)
-- ✅ **Conversation memory and session context reuse** 🎉 NEW!
-- 🔄 Common error pattern recognition for faster diagnosis
-- 🔄 Intent classification and direct routing for common troubleshooting flows
-- 🔄 Cached tool results within a troubleshooting session
-- 🔄 Consul Connect sidecar proxy diagnostics
-- 🔄 Advanced service-to-service communication analysis
+- ✅ **Conversation memory and session context reuse** (Phase 2.1) 🎉
+- ✅ **Common error pattern recognition for faster diagnosis** (Phase 2.2) 🎉
+- ✅ **Intent classification and direct routing for common troubleshooting flows** (Phase 2.3) 🎉
+- 🔄 Cached tool results within a troubleshooting session (Phase 2.4)
+- 🔄 Consul Connect sidecar proxy diagnostics (Phase 2.5)
+- 🔄 Advanced service-to-service communication analysis (Phase 2.6)
 
 ### Phase 2 Priorities
 
@@ -34,15 +34,20 @@ Phase 2 is being prioritized around two goals:
    - Recognize recurring Kubernetes and Consul failure patterns
    - Expand diagnostics for Consul Connect and service-to-service issues
 
-Planned implementation order for highest user value:
-1. Conversation memory and session context reuse
-2. Intent classification and direct routing for common issues
-3. Session-scoped caching of tool results
-4. Common error pattern recognition
-5. Consul Connect sidecar proxy diagnostics
-6. Advanced service-to-service communication analysis
+**Completed so far:**
+1. ✅ Conversation memory and session context reuse (Phase 2.1)
+2. ✅ Common error pattern recognition for faster diagnosis (Phase 2.2)
+3. ✅ Intent classification and direct routing for common issues (Phase 2.3)
 
-This keeps the original Phase 2 direction intact while reordering work to improve speed and usability first.
+**Remaining:**
+4. 🔄 Session-scoped caching of tool results (Phase 2.4)
+5. 🔄 Consul Connect sidecar proxy diagnostics (Phase 2.5)
+6. 🔄 Advanced service-to-service communication analysis (Phase 2.6)
+
+📖 **Documentation:**
+- [Conversation Memory Feature](MEMORY_FEATURE.md)
+- [Error Pattern Recognition](ERROR_PATTERN_RECOGNITION.md)
+- [Intent Classification & Routing](INTENT_ROUTING_FEATURE.md)
 
 ### Phase 3: Advanced Workflows (Future)
 - 📋 LangGraph state machines for complex diagnostics
