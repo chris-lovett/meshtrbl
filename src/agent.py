@@ -21,6 +21,7 @@ from .tools import KubernetesTools, ConsulTools
 from .prompts.system_prompts import SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
 from .error_patterns import pattern_matcher, format_pattern_match
 from .intent_classifier import intent_classifier, IntentType
+from .session_cache import SessionCache
 
 
 class TroubleshootingAgent:
@@ -39,7 +40,10 @@ class TroubleshootingAgent:
                  reasoning_model: Optional[str] = None,
                  verbose: bool = False,
                  enable_memory: bool = True,
-                 enable_intent_routing: bool = True):
+                 enable_intent_routing: bool = True,
+                 enable_cache: bool = True,
+                 cache_ttl: int = 300,
+                 cache_max_size: int = 100):
         """
         Initialize the troubleshooting agent.
         
@@ -55,6 +59,9 @@ class TroubleshootingAgent:
             verbose: Enable verbose logging
             enable_memory: Enable conversation memory (default: True)
             enable_intent_routing: Enable intent classification and fast-path routing (default: True)
+            enable_cache: Enable session-scoped caching (default: True)
+            cache_ttl: Default cache TTL in seconds (default: 300)
+            cache_max_size: Maximum cache entries (default: 100)
         """
         # Load environment variables
         load_dotenv()
@@ -74,6 +81,14 @@ class TroubleshootingAgent:
         self._active_tool_outputs: list = []
         self.enable_memory = enable_memory
         self.enable_intent_routing = enable_intent_routing
+        self.enable_cache = enable_cache
+        
+        # Initialize session cache
+        self.cache = SessionCache(
+            default_ttl=cache_ttl,
+            max_size=cache_max_size,
+            enabled=enable_cache
+        )
         
         # Initialize conversation memory
         self.memory = ConversationBufferMemory(
@@ -126,9 +141,10 @@ class TroubleshootingAgent:
                 name="get_pod_status",
                 func=self._wrap_tool_activity(
                     "Checking pod status...",
-                    lambda x: self._parse_and_call(self.k8s_tools.get_pod_status, x)
+                    lambda x: self._parse_and_call(self.k8s_tools.get_pod_status, x),
+                    tool_name="get_pod_status"
                 ),
-                description="""Get the status of a Kubernetes pod. 
+                description="""Get the status of a Kubernetes pod.
                 Input should be: pod_name or pod_name,namespace
                 Example: "my-app-pod" or "my-app-pod,production"
                 Use this to check if a pod is running, pending, or has errors."""
@@ -137,7 +153,8 @@ class TroubleshootingAgent:
                 name="get_pod_logs",
                 func=self._wrap_tool_activity(
                     "Reviewing logs...",
-                    lambda x: self._parse_and_call(self.k8s_tools.get_pod_logs, x)
+                    lambda x: self._parse_and_call(self.k8s_tools.get_pod_logs, x),
+                    tool_name="get_pod_logs"
                 ),
                 description="""Get logs from a Kubernetes pod.
                 Input should be: pod_name or pod_name,namespace or pod_name,namespace,container
@@ -148,7 +165,8 @@ class TroubleshootingAgent:
                 name="list_pods",
                 func=self._wrap_tool_activity(
                     "Listing pods...",
-                    lambda x: self._parse_and_call(self.k8s_tools.list_pods, x)
+                    lambda x: self._parse_and_call(self.k8s_tools.list_pods, x),
+                    tool_name="list_pods"
                 ),
                 description="""List all pods in a namespace.
                 Input should be: namespace or namespace,label_selector
@@ -159,7 +177,8 @@ class TroubleshootingAgent:
                 name="describe_pod",
                 func=self._wrap_tool_activity(
                     "Inspecting pod details...",
-                    lambda x: self._parse_and_call(self.k8s_tools.describe_pod, x)
+                    lambda x: self._parse_and_call(self.k8s_tools.describe_pod, x),
+                    tool_name="describe_pod"
                 ),
                 description="""Get detailed information about a pod (similar to kubectl describe).
                 Input should be: pod_name or pod_name,namespace
@@ -172,7 +191,8 @@ class TroubleshootingAgent:
                 name="list_consul_services",
                 func=self._wrap_tool_activity(
                     "Listing Consul services...",
-                    lambda x: self.consul_tools.list_services()
+                    lambda x: self.consul_tools.list_services(),
+                    tool_name="list_consul_services"
                 ),
                 description="""List all services registered in Consul.
                 Input: empty string or datacenter name
@@ -182,7 +202,8 @@ class TroubleshootingAgent:
                 name="get_service_health",
                 func=self._wrap_tool_activity(
                     "Checking Consul service health...",
-                    lambda x: self.consul_tools.get_service_health(x)
+                    lambda x: self.consul_tools.get_service_health(x),
+                    tool_name="get_service_health"
                 ),
                 description="""Get health status of a Consul service.
                 Input should be: service_name
@@ -193,7 +214,8 @@ class TroubleshootingAgent:
                 name="get_service_instances",
                 func=self._wrap_tool_activity(
                     "Reviewing service instances...",
-                    lambda x: self.consul_tools.get_service_instances(x)
+                    lambda x: self.consul_tools.get_service_instances(x),
+                    tool_name="get_service_instances"
                 ),
                 description="""Get all instances of a Consul service.
                 Input should be: service_name
@@ -204,7 +226,8 @@ class TroubleshootingAgent:
                 name="list_consul_intentions",
                 func=self._wrap_tool_activity(
                     "Listing Consul intentions...",
-                    lambda x: self.consul_tools.list_intentions()
+                    lambda x: self.consul_tools.list_intentions(),
+                    tool_name="list_consul_intentions"
                 ),
                 description="""List all Consul Connect intentions (service-to-service access rules).
                 Input: empty string
@@ -214,7 +237,8 @@ class TroubleshootingAgent:
                 name="check_consul_intention",
                 func=self._wrap_tool_activity(
                     "Checking Consul intention...",
-                    lambda x: self._parse_and_call(self.consul_tools.check_intention, x)
+                    lambda x: self._parse_and_call(self.consul_tools.check_intention, x),
+                    tool_name="check_consul_intention"
                 ),
                 description="""Check if traffic is allowed between two services.
                 Input should be: source_service,destination_service
@@ -225,7 +249,8 @@ class TroubleshootingAgent:
                 name="get_consul_members",
                 func=self._wrap_tool_activity(
                     "Checking Consul cluster members...",
-                    lambda x: self.consul_tools.get_agent_members()
+                    lambda x: self.consul_tools.get_agent_members(),
+                    tool_name="get_consul_members"
                 ),
                 description="""Get Consul cluster members.
                 Input: empty string
@@ -237,7 +262,8 @@ class TroubleshootingAgent:
                 name="match_error_pattern",
                 func=self._wrap_tool_activity(
                     "Analyzing error patterns...",
-                    lambda x: self._match_error_pattern(x)
+                    lambda x: self._match_error_pattern(x),
+                    tool_name="match_error_pattern"
                 ),
                 description="""Match error messages or logs against known error patterns for instant diagnosis.
                 Input should be: error_text or error_text,category
@@ -249,7 +275,8 @@ class TroubleshootingAgent:
                 name="search_error_patterns",
                 func=self._wrap_tool_activity(
                     "Searching error pattern database...",
-                    lambda x: self._search_error_patterns(x)
+                    lambda x: self._search_error_patterns(x),
+                    tool_name="search_error_patterns"
                 ),
                 description="""Search the error pattern database by keywords or symptoms.
                 Input should be: search_query
@@ -260,10 +287,19 @@ class TroubleshootingAgent:
         
         return tools
     
-    def _wrap_tool_activity(self, activity_message: str, func):
-        """Print lightweight tool activity when verbose mode is disabled."""
+    def _wrap_tool_activity(self, activity_message: str, func, tool_name: str = ""):
+        """Print lightweight tool activity when verbose mode is disabled, with caching support."""
         def wrapped(input_str: str):
             normalized_input = (input_str or "").strip()
+            
+            # Check cache first
+            if self.enable_cache and tool_name:
+                cached_result = self.cache.get(tool_name, normalized_input)
+                if cached_result is not None:
+                    if not self.verbose:
+                        print(f"\n{activity_message} [cached]", flush=True)
+                    return cached_result
+            
             if self._active_tool_tracker is not None:
                 tool_key = f"{activity_message}|{normalized_input}"
                 self._active_tool_tracker[tool_key] += 1
@@ -276,6 +312,10 @@ class TroubleshootingAgent:
                 print(f"\n{activity_message}", flush=True)
 
             result = func(input_str)
+            
+            # Store in cache
+            if self.enable_cache and tool_name:
+                self.cache.set(tool_name, result, normalized_input)
 
             if self._active_tool_tracker is not None:
                 rendered_result = str(result).strip()
@@ -642,6 +682,41 @@ class TroubleshootingAgent:
         
         return ",".join(resolved)
     
+    def clear_cache(self):
+        """Clear the session cache."""
+        if self.cache:
+            self.cache.clear()
+            if self.verbose:
+                print("Session cache cleared.")
+    
+    def get_cache_stats(self) -> str:
+        """
+        Get cache statistics.
+        
+        Returns:
+            Formatted cache statistics
+        """
+        if not self.cache:
+            return "Caching is disabled for this session."
+        
+        return self.cache.get_summary()
+    
+    def invalidate_cache(self, tool_name: Optional[str] = None, pattern: Optional[str] = None):
+        """
+        Invalidate cache entries.
+        
+        Args:
+            tool_name: Invalidate all entries for this tool (optional)
+            pattern: Invalidate entries matching this pattern (optional)
+        """
+        if self.cache:
+            self.cache.invalidate(tool_name=tool_name, pattern=pattern)
+            if self.verbose:
+                if tool_name:
+                    print(f"Cache invalidated for tool: {tool_name}")
+                elif pattern:
+                    print(f"Cache invalidated for pattern: {pattern}")
+    
     def clear_memory(self):
         """Clear the conversation memory."""
         if self.memory:
@@ -813,11 +888,17 @@ class TroubleshootingAgent:
         if self.enable_intent_routing:
             print("🚀 Intent routing is ENABLED - Fast-path for common issues!")
         
+        if self.enable_cache:
+            print("⚡ Session caching is ENABLED - Faster repeated queries!")
+        
+        print("\nSpecial commands:")
         if self.enable_memory:
-            print("\nSpecial commands:")
-            print("  /clear    - Clear conversation memory")
-            print("  /history  - Show conversation history")
-            print("  /summary  - Show conversation summary")
+            print("  /clear      - Clear conversation memory")
+            print("  /history    - Show conversation history")
+            print("  /summary    - Show conversation summary")
+        if self.enable_cache:
+            print("  /cache      - Show cache statistics")
+            print("  /clearcache - Clear session cache")
         
         print("\nType 'exit' or 'quit' to end the session.\n")
         
@@ -852,9 +933,19 @@ class TroubleshootingAgent:
                     elif user_input.lower() == '/summary':
                         print(f"\n📋 Conversation Summary:\n{self.get_conversation_summary()}")
                         continue
+                    elif user_input.lower() == '/cache':
+                        print(f"\n{self.get_cache_stats()}")
+                        continue
+                    elif user_input.lower() == '/clearcache':
+                        self.clear_cache()
+                        print("✓ Session cache cleared.")
+                        continue
                     else:
                         print(f"Unknown command: {user_input}")
-                        print("Available commands: /clear, /history, /summary")
+                        available = ["/clear", "/history", "/summary"]
+                        if self.enable_cache:
+                            available.extend(["/cache", "/clearcache"])
+                        print(f"Available commands: {', '.join(available)}")
                         continue
                 
                 response = self._run_with_spinner(user_input)
@@ -882,6 +973,9 @@ def main():
     parser.add_argument("--query", help="Single query to run (non-interactive mode)")
     parser.add_argument("--no-memory", action="store_true", help="Disable conversation memory")
     parser.add_argument("--no-intent-routing", action="store_true", help="Disable intent classification and fast-path routing")
+    parser.add_argument("--no-cache", action="store_true", help="Disable session-scoped caching")
+    parser.add_argument("--cache-ttl", type=int, default=300, help="Cache TTL in seconds (default: 300)")
+    parser.add_argument("--cache-size", type=int, default=100, help="Maximum cache entries (default: 100)")
     
     args = parser.parse_args()
     
@@ -894,7 +988,10 @@ def main():
         consul_port=args.consul_port,
         verbose=args.verbose,
         enable_memory=not args.no_memory,
-        enable_intent_routing=not args.no_intent_routing
+        enable_intent_routing=not args.no_intent_routing,
+        enable_cache=not args.no_cache,
+        cache_ttl=args.cache_ttl,
+        cache_max_size=args.cache_size
     )
     
     # Run in appropriate mode
