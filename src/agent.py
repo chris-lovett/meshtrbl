@@ -22,7 +22,14 @@ from .prompts.system_prompts import SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
 from .error_patterns import pattern_matcher, format_pattern_match
 from .intent_classifier import intent_classifier, IntentType
 from .session_cache import SessionCache
-from .workflows import TroubleshootingWorkflow
+
+# Optional Phase 3 workflow support
+try:
+    from .workflows import TroubleshootingWorkflow
+    WORKFLOW_AVAILABLE = True
+except ImportError:
+    TroubleshootingWorkflow = None
+    WORKFLOW_AVAILABLE = False
 
 
 class TroubleshootingAgent:
@@ -142,13 +149,21 @@ class TroubleshootingAgent:
             handle_parsing_errors=True
         )
         
-        # Initialize LangGraph workflow (Phase 3)
-        self.workflow = TroubleshootingWorkflow(
-            k8s_tools=self.k8s_tools,
-            consul_tools=self.consul_tools,
-            llm=self.llm,
-            verbose=verbose
-        ) if enable_workflow else None
+        # Initialize LangGraph workflow (Phase 3) - only if available
+        if enable_workflow and WORKFLOW_AVAILABLE and TroubleshootingWorkflow is not None:
+            self.workflow = TroubleshootingWorkflow(
+                k8s_tools=self.k8s_tools,
+                consul_tools=self.consul_tools,
+                llm=self.llm,
+                verbose=verbose
+            )
+        else:
+            self.workflow = None
+            if enable_workflow and not WORKFLOW_AVAILABLE:
+                if verbose:
+                    print("Warning: LangGraph workflow mode requested but langgraph is not installed.")
+                    print("Install with: pip install langgraph")
+                    print("Falling back to standard agent mode.")
     
     def _create_tools(self) -> list:
         """Create LangChain tools from Kubernetes and Consul tools."""
