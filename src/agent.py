@@ -1060,6 +1060,9 @@ def main():
     """Main entry point for the agent."""
     import argparse
     
+    # Load environment variables early so they're available for health checks
+    load_dotenv()
+    
     parser = argparse.ArgumentParser(
         description="Kubernetes & Consul Troubleshooting Agent",
         formatter_class=argparse.RawDescriptionHelpFormatter,

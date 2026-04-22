@@ -13,24 +13,23 @@ try:
     import questionary
     from questionary import Style
     QUESTIONARY_AVAILABLE = True
+    # Custom style for questionary
+    custom_style = Style([
+        ('qmark', 'fg:#673ab7 bold'),
+        ('question', 'bold'),
+        ('answer', 'fg:#2196f3 bold'),
+        ('pointer', 'fg:#673ab7 bold'),
+        ('highlighted', 'fg:#673ab7 bold'),
+        ('selected', 'fg:#4caf50'),
+        ('separator', 'fg:#cc5454'),
+        ('instruction', ''),
+        ('text', ''),
+    ])
 except ImportError:
     QUESTIONARY_AVAILABLE = False
+    custom_style = None
 
 from .ux_utils import console, print_header, print_success, print_error, print_warning, print_info
-
-
-# Custom style for questionary
-custom_style = Style([
-    ('qmark', 'fg:#673ab7 bold'),
-    ('question', 'bold'),
-    ('answer', 'fg:#2196f3 bold'),
-    ('pointer', 'fg:#673ab7 bold'),
-    ('highlighted', 'fg:#673ab7 bold'),
-    ('selected', 'fg:#4caf50'),
-    ('separator', 'fg:#cc5454'),
-    ('instruction', ''),
-    ('text', ''),
-])
 
 
 class ConfigWizard:
