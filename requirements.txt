@@ -4,6 +4,9 @@ langchain-openai>=0.1.0,<0.2.0
 langchain-community>=0.2.0,<0.3.0
 langchain-core>=0.2.0,<0.3.0
 
+# LangGraph for Phase 3 - state machines and workflows
+langgraph>=0.1.0,<0.2.0
+
 # OpenAI - latest stable
 openai>=1.30.0,<2.0.0
 

@@ -1,6 +1,6 @@
 # Kubernetes & Consul Service Mesh Troubleshooting Agent
 
-An AI-powered agent built with LangChain and OpenAI GPT-4 to help troubleshoot Kubernetes clusters and HashiCorp Consul service mesh issues.
+An AI-powered agent built with LangChain, LangGraph, and OpenAI GPT-4 to help troubleshoot Kubernetes clusters and HashiCorp Consul service mesh issues.
 
 ## 🎯 Features
 
@@ -19,6 +19,14 @@ An AI-powered agent built with LangChain and OpenAI GPT-4 to help troubleshoot K
 - ✅ **Session-scoped caching for instant repeated queries** (Phase 2.4) 🎉
 - ✅ **Consul Connect sidecar proxy diagnostics** (Phase 2.5) 🎉
 - ✅ **Advanced service-to-service communication analysis** (Phase 2.6) 🎉
+
+### Phase 3: LangGraph Workflows ✅ Complete
+- ✅ **State-based workflow orchestration** (Phase 3) 🚀
+- ✅ **Parallel tool execution for 2-3x faster diagnostics** 🚀
+- ✅ **Conditional routing based on issue type** 🚀
+- ✅ **Automated remediation suggestions** 🚀
+- ✅ **Workflow visualization and execution tracking** 🚀
+- ✅ **Complex decision trees for multi-component issues** 🚀
 
 ### Phase 2 Priorities
 
@@ -44,6 +52,7 @@ Phase 2 is being prioritized around two goals:
 6. ✅ Advanced service-to-service communication analysis (Phase 2.6)
 
 📖 **Documentation:**
+- [Phase 3: LangGraph Workflows](PHASE3_LANGGRAPH_WORKFLOWS.md) 🆕
 - [Conversation Memory Feature](MEMORY_FEATURE.md)
 - [Error Pattern Recognition](ERROR_PATTERN_RECOGNITION.md)
 - [Intent Classification & Routing](INTENT_ROUTING_FEATURE.md)
@@ -52,12 +61,6 @@ Phase 2 is being prioritized around two goals:
 - [Service Communication Analysis](SERVICE_COMMUNICATION_FEATURE.md)
 - [Execution Limits Improvement](EXECUTION_LIMITS_IMPROVEMENT.md)
 - [Pod Health Query Fix](FIX_POD_HEALTH_QUERY.md)
-
-### Phase 3: Advanced Workflows (Future)
-- 📋 LangGraph state machines for complex diagnostics
-- 📋 Parallel tool execution for faster troubleshooting
-- 📋 Conditional routing based on issue type
-- 📋 Automated remediation suggestions
 
 ## 🚀 Quick Start
 

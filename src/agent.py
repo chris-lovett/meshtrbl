@@ -22,6 +22,7 @@ from .prompts.system_prompts import SYSTEM_PROMPT, REACT_PROMPT_TEMPLATE
 from .error_patterns import pattern_matcher, format_pattern_match
 from .intent_classifier import intent_classifier, IntentType
 from .session_cache import SessionCache
+from .workflows import TroubleshootingWorkflow
 
 
 class TroubleshootingAgent:
@@ -42,6 +43,7 @@ class TroubleshootingAgent:
                  enable_memory: bool = True,
                  enable_intent_routing: bool = True,
                  enable_cache: bool = True,
+                 enable_workflow: bool = True,
                  cache_ttl: int = 300,
                  cache_max_size: int = 100,
                  max_iterations: int = 35,
@@ -62,6 +64,7 @@ class TroubleshootingAgent:
             enable_memory: Enable conversation memory (default: True)
             enable_intent_routing: Enable intent classification and fast-path routing (default: True)
             enable_cache: Enable session-scoped caching (default: True)
+            enable_workflow: Enable LangGraph workflow mode (default: True, Phase 3)
             cache_ttl: Default cache TTL in seconds (default: 300)
             cache_max_size: Maximum cache entries (default: 100)
             max_iterations: Maximum number of tool calls per query (default: 35)
@@ -86,6 +89,7 @@ class TroubleshootingAgent:
         self.enable_memory = enable_memory
         self.enable_intent_routing = enable_intent_routing
         self.enable_cache = enable_cache
+        self.enable_workflow = enable_workflow
         self.max_iterations = max_iterations
         self.max_execution_time = max_execution_time
         
@@ -137,6 +141,14 @@ class TroubleshootingAgent:
             max_execution_time=self.max_execution_time,
             handle_parsing_errors=True
         )
+        
+        # Initialize LangGraph workflow (Phase 3)
+        self.workflow = TroubleshootingWorkflow(
+            k8s_tools=self.k8s_tools,
+            consul_tools=self.consul_tools,
+            llm=self.llm,
+            verbose=verbose
+        ) if enable_workflow else None
     
     def _create_tools(self) -> list:
         """Create LangChain tools from Kubernetes and Consul tools."""
@@ -561,6 +573,66 @@ class TroubleshootingAgent:
         ]
         return len(query.split()) > 25 or sum(signal in normalized for signal in complexity_signals) >= 2
 
+    def _run_workflow_mode(self, query: str) -> str:
+        """
+        Run troubleshooting using LangGraph workflow (Phase 3).
+        
+        This provides:
+        - State-based workflow management
+        - Parallel tool execution
+        - Conditional routing based on issue type
+        - Automated remediation suggestions
+        """
+        if not self.workflow:
+            return self._run_live_troubleshooting(query)
+        
+        try:
+            if self.verbose:
+                print("\n[Phase 3] Running LangGraph workflow mode...")
+            
+            # Execute the workflow
+            final_state = self.workflow.run(query)
+            
+            # Format the results
+            output = []
+            output.append("=== Troubleshooting Analysis (LangGraph Workflow) ===\n")
+            
+            # Show execution path
+            if "execution_path" in final_state:
+                output.append(f"Workflow Path: {' → '.join(final_state['execution_path'])}\n")
+            
+            # Show root cause
+            if "root_cause" in final_state:
+                output.append(f"Root Cause:\n{final_state['root_cause']}\n")
+            
+            # Show remediation steps
+            if "remediation_steps" in final_state and final_state["remediation_steps"]:
+                output.append("\nRemediation Steps:")
+                for i, step in enumerate(final_state["remediation_steps"][:5], 1):
+                    output.append(f"{i}. {step}")
+                output.append("")
+            
+            # Show automated fixes if available
+            if "automated_fixes" in final_state and final_state["automated_fixes"]:
+                output.append("\nAutomated Fix Suggestions:")
+                for fix in final_state["automated_fixes"]:
+                    output.append(f"  • {fix['pattern']}: {fix['description']}")
+                    if fix.get('safe', False):
+                        output.append(f"    (Safe to automate)")
+                output.append("")
+            
+            # Show execution time
+            if "workflow_start_time" in final_state and "workflow_end_time" in final_state:
+                duration = (final_state["workflow_end_time"] - final_state["workflow_start_time"]).total_seconds()
+                output.append(f"\nWorkflow completed in {duration:.2f} seconds")
+            
+            return "\n".join(output)
+            
+        except Exception as e:
+            if self.verbose:
+                print(f"[Phase 3] Workflow error: {e}, falling back to standard agent")
+            return self._run_live_troubleshooting(query)
+    
     def _run_live_troubleshooting(self, query: str) -> str:
         """Run the full troubleshooting agent executor."""
         self._active_tool_tracker = Counter()
@@ -840,6 +912,10 @@ class TroubleshootingAgent:
 
             if route == "repo_code_assistance":
                 return self._run_repo_code_assistance(query)
+
+            # Phase 3: Use workflow mode for complex troubleshooting if enabled
+            if self.enable_workflow and self._is_complex_troubleshooting_query(query):
+                return self._run_workflow_mode(query)
 
             return self._run_live_troubleshooting(query)
         except Exception as e:
