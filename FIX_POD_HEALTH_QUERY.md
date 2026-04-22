@@ -91,7 +91,7 @@ When the agent receives "are all my pods healthy?", it should now:
 ### Automated Testing
 Run the test script:
 ```bash
-cd ../hashi/k8s-consul-troubleshooting-agent
+cd ../hashi/meshtrbl
 python test_pod_health_query.py
 ```
 

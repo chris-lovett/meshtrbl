@@ -16,7 +16,7 @@ Before starting, ensure you have:
 
 ```bash
 # Navigate to the project directory
-cd k8s-consul-troubleshooting-agent
+cd meshtrbl
 
 # Install a supported Python on macOS
 brew install python@3.11

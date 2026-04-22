@@ -15,7 +15,7 @@ Your git repository is initialized and ready to push to GitHub!
 
 1. **Go to GitHub and create a new repository:**
    - Visit: https://github.com/new
-   - Repository name: `k8s-consul-troubleshooting-agent` (or your preferred name)
+   - Repository name: `meshtrbl`
    - Description: "AI-powered troubleshooting agent for Kubernetes and HashiCorp Consul service mesh"
    - Choose: Public or Private
    - **DO NOT** initialize with README, .gitignore, or license (we already have these)
@@ -23,10 +23,10 @@ Your git repository is initialized and ready to push to GitHub!
 
 2. **Add the remote and push:**
    ```bash
-   cd k8s-consul-troubleshooting-agent
-   
+   cd meshtrbl
+
    # Add your GitHub repository as remote (replace YOUR_USERNAME)
-   git remote add origin https://github.com/YOUR_USERNAME/k8s-consul-troubleshooting-agent.git
+   git remote add origin https://github.com/YOUR_USERNAME/meshtrbl.git
    
    # Push to GitHub
    git push -u origin main
@@ -40,10 +40,10 @@ Your git repository is initialized and ready to push to GitHub!
 ### Option 2: Using SSH (If you have SSH keys configured)
 
 ```bash
-cd k8s-consul-troubleshooting-agent
+cd meshtrbl
 
 # Add remote using SSH
-git remote add origin git@github.com:YOUR_USERNAME/k8s-consul-troubleshooting-agent.git
+git remote add origin git@github.com:YOUR_USERNAME/meshtrbl.git
 
 # Push to GitHub
 git push -u origin main
@@ -54,13 +54,13 @@ git push -u origin main
 If you have GitHub CLI installed:
 
 ```bash
-cd k8s-consul-troubleshooting-agent
+cd meshtrbl
 
 # Create repository and push in one command
-gh repo create k8s-consul-troubleshooting-agent --public --source=. --push
+gh repo create meshtrbl --public --source=. --push
 
 # Or for private repository
-gh repo create k8s-consul-troubleshooting-agent --private --source=. --push
+gh repo create meshtrbl --private --source=. --push
 ```
 
 ## Recommended Repository Settings
@@ -209,18 +209,18 @@ Here's the complete workflow from where you are now:
 
 ```bash
 # 1. Create repository on GitHub (via web interface)
-#    Name: k8s-consul-troubleshooting-agent
+#    Name: meshtrbl
 #    Don't initialize with anything
 
 # 2. Add remote (replace YOUR_USERNAME)
-cd k8s-consul-troubleshooting-agent
-git remote add origin https://github.com/YOUR_USERNAME/k8s-consul-troubleshooting-agent.git
+cd meshtrbl
+git remote add origin https://github.com/YOUR_USERNAME/meshtrbl.git
 
 # 3. Push to GitHub
 git push -u origin main
 
 # 4. Verify
-# Visit: https://github.com/YOUR_USERNAME/k8s-consul-troubleshooting-agent
+# Visit: https://github.com/YOUR_USERNAME/meshtrbl
 ```
 
 ## What's Already Done ✅
@@ -236,7 +236,7 @@ git push -u origin main
 You're one command away from having this on GitHub:
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/k8s-consul-troubleshooting-agent.git
+git remote add origin https://github.com/YOUR_USERNAME/meshtrbl.git
 git push -u origin main
 ```
 

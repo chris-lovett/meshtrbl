@@ -142,7 +142,7 @@ The agent includes **conversation memory** to maintain context across multiple q
 ## Project Structure
 
 ```
-k8s-consul-troubleshooting-agent/
+meshtrbl/
 ├── README.md                          # Comprehensive documentation
 ├── QUICKSTART.md                      # 5-minute setup guide
 ├── PROJECT_SUMMARY.md                 # This file

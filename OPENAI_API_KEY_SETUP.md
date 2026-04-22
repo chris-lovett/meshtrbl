@@ -69,7 +69,7 @@ This guide will walk you through getting an OpenAI API key to use with the troub
 
 1. **Navigate to your project:**
    ```bash
-   cd /Users/chrislovett/Desktop/k8s-consul-troubleshooting-agent
+   cd /Users/chrislovett/Desktop/meshtrbl
    ```
 
 2. **Copy the example environment file:**
@@ -156,7 +156,7 @@ This guide will walk you through getting an OpenAI API key to use with the troub
 Once you've added your API key, test it:
 
 ```bash
-cd /Users/chrislovett/Desktop/k8s-consul-troubleshooting-agent
+cd /Users/chrislovett/Desktop/meshtrbl
 
 # Activate virtual environment
 source venv/bin/activate

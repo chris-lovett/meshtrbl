@@ -1,6 +1,9 @@
-# Kubernetes & Consul Service Mesh Troubleshooting Agent
+# meshtrbl - Mesh Troubleshooter
 
-An AI-powered agent built with LangChain, LangGraph, and OpenAI GPT-4 to help troubleshoot Kubernetes clusters and HashiCorp Consul service mesh issues.
+An AI-powered troubleshooting agent built with LangChain, LangGraph, and OpenAI GPT-4 for Kubernetes clusters and HashiCorp Consul service mesh.
+
+**Package Name:** `meshtrbl` (short for "Mesh Troubleshooter")
+**Command:** `meshtrbl`
 
 ## 🎯 Features
 
@@ -77,7 +80,7 @@ Phase 2 is being prioritized around two goals:
 
 1. **Clone or navigate to the project directory:**
 ```bash
-cd k8s-consul-troubleshooting-agent
+cd meshtrbl
 ```
 
 2. **Install a supported Python on macOS (recommended):**
@@ -92,13 +95,18 @@ brew install python@3.11
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-4. **Install dependencies:**
+4. **Install the package:**
 ```bash
 python -m pip install --upgrade pip
-pip install -r requirements.txt
+
+# Install with all features (recommended)
+pip install ".[all]"
+
+# Or basic installation
+pip install .
 ```
 
-4. **Configure environment variables:**
+5. **Configure environment variables:**
 ```bash
 cp .env.example .env
 # Edit .env and add your OpenAI API key and other settings
@@ -163,7 +171,14 @@ Do not commit extracted CA files into git. Keep them local and ignored.
 
 ### Running the Agent
 
+After installation, use the `meshtrbl` command:
+
 #### Interactive Mode with Conversation Memory (Recommended)
+```bash
+meshtrbl
+```
+
+Or using Python module:
 ```bash
 python -m src.agent
 ```
@@ -179,17 +194,17 @@ This starts an interactive chat session with **conversation memory enabled** by 
 
 #### Interactive Mode without Memory
 ```bash
-python -m src.agent --no-memory
+meshtrbl --no-memory
 ```
 
 #### Single Query Mode
 ```bash
-python -m src.agent --query "Why is my pod in CrashLoopBackOff?"
+meshtrbl --query "Why is my pod in CrashLoopBackOff?"
 ```
 
 #### With Custom Options
 ```bash
-python -m src.agent \
+meshtrbl \
   --namespace production \
   --consul-host consul.example.com \
   --consul-port 8500 \
@@ -260,7 +275,7 @@ export CONSUL_HTTP_ADDR=127.0.0.1:8501
 export CONSUL_HTTP_SSL=true
 export CONSUL_HTTP_SSL_VERIFY=false   # or set CONSUL_CACERT instead
 export CONSUL_HTTP_TOKEN=<secret-id>
-python -m src.agent
+meshtrbl
 ```
 
 Notes:

@@ -6,7 +6,7 @@ To use the new Phase 3 LangGraph workflow features, you need to install the upda
 
 ```bash
 # Navigate to project directory
-cd /k8s-consul-troubleshooting-agent
+cd meshtrbl
 
 # Activate your virtual environment (if using one)
 source venv/bin/activate
