@@ -16,24 +16,22 @@ An AI-powered troubleshooting agent built with LangChain, LangGraph, and OpenAI 
 - ✅ ReAct reasoning pattern for systematic troubleshooting
 
 ### Phase 2: Enhanced Intelligence ✅ Complete
-- ✅ **Conversation memory and session context reuse** (Phase 2.1) 🎉
-- ✅ **Common error pattern recognition for faster diagnosis** (Phase 2.2) 🎉
-- ✅ **Intent classification and direct routing for common troubleshooting flows** (Phase 2.3) 🎉
-- ✅ **Session-scoped caching for instant repeated queries** (Phase 2.4) 🎉
-- ✅ **Consul Connect sidecar proxy diagnostics** (Phase 2.5) 🎉
-- ✅ **Advanced service-to-service communication analysis** (Phase 2.6) 🎉
+- ✅ Common error pattern recognition for faster diagnosis
+- ✅ Intent classification and direct routing for common troubleshooting flows
+- ✅ Session-scoped caching for instant repeated queries
+- ✅ Consul Connect sidecar proxy diagnostics 
+- ✅ Advanced service-to-service communication analysis 
 
 ### Phase 3: LangGraph Workflows ✅ Complete
-- ✅ **State-based workflow orchestration** (Phase 3) 🚀
-- ✅ **Parallel tool execution for 2-3x faster diagnostics** 🚀
-- ✅ **Conditional routing based on issue type** 🚀
-- ✅ **Automated remediation suggestions** 🚀
-- ✅ **Workflow visualization and execution tracking** 🚀
-- ✅ **Complex decision trees for multi-component issues** 🚀
+- ✅ State-based workflow orchestration
+- ✅ Parallel tool execution for 2-3x faster diagnostics
+- ✅ Conditional routing based on issue type
+- ✅ Automated remediation suggestions
+- ✅ Workflow visualization and execution tracking
+- ✅ Complex decision trees for multi-component issues
 
 
 📖 **Documentation:**
-- [Phase 3: LangGraph Workflows](docs/PHASE3_LANGGRAPH_WORKFLOWS.md) 🆕
 - [Quick Start Guide](docs/QUICKSTART.md)
 - [Installation Guide](docs/INSTALL.md)
 - [Packaging Guide](docs/PACKAGING.md)
@@ -43,6 +41,7 @@ An AI-powered troubleshooting agent built with LangChain, LangGraph, and OpenAI 
 - [Session-Scoped Caching](docs/SESSION_CACHE_FEATURE.md)
 - [Consul Connect Diagnostics](docs/CONSUL_CONNECT_FEATURE.md)
 - [Service Communication Analysis](docs/SERVICE_COMMUNICATION_FEATURE.md)
+- [Phase 3: LangGraph Workflows](docs/PHASE3_LANGGRAPH_WORKFLOWS.md) 🆕
 
 ## 🚀 Quick Start
 
@@ -139,11 +138,9 @@ export CONSUL_CACERT=$(pwd)/consul-ca-from-cluster.pem
 export CONSUL_HTTP_TOKEN=<consul-token-secret-id>
 ```
 
-Lessons learned:
+Note:
 - Use the CA extracted from the running cluster, not an older local copy.
 - `CONSUL_HTTP_ADDR` must be `host:port` without `http://` or `https://`.
-- The built-in Consul CA can be correct, but the local PEM must match the active cluster CA exactly.
-- OpenShift/AWS only matter if TLS is terminated before Consul. If the presented certificate is `server.dc1.consul`, you are talking directly to Consul's HTTPS listener.
 - Avoid `CONSUL_HTTP_SSL_VERIFY=false` except for short-lived local debugging.
 
 Do not commit extracted CA files into git. Keep them local and ignored.
